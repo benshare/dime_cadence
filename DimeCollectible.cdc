@@ -122,11 +122,11 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub resource NFTMinter {
 		// Mints an NFT with a new ID and deposits it in the recipient's
 		// collection using their collection reference
-		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, creator: Address, content: String) {
-			emit Minted(id: DimeCollectible.totalSupply)
+		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64, creator: Address, content: String) {
+			emit Minted(id: tokenId)
 
 			// deposit it in the collection using the reference
-			collection.deposit(token: <-create DimeCollectible.NFT(initID: DimeCollectible.totalSupply, creatorInit: creator, contentInit: content))
+			collection.deposit(token: <-create DimeCollectible.NFT(initID: tokenId, creatorInit: creator, contentInit: content))
 			DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
 		}
 	}
