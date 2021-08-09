@@ -86,7 +86,7 @@ pub contract DimeMarket {
         // Take the information required to create a sale offer: the capability
         // to transfer the DimeCollectible NFT and the capability to receive payment
         init(
-            sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider, DimeCollectible.DimeCollectionPublic}>,
+            sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
             itemId: UInt64,
             creator: Address,
             content: String,
@@ -99,10 +99,6 @@ pub contract DimeMarket {
             self.saleCompleted = false
 
             let collectionRef = sellerItemProvider.borrow()!
-            assert(
-                collectionRef.borrowCollectible(id: itemId) != nil,
-                message: "Specified NFT is not available in the owner's collection"
-            )
 
             self.sellerItemProvider = sellerItemProvider
             self.itemId = itemId
@@ -117,7 +113,7 @@ pub contract DimeMarket {
 
     // Make creating a SaleOffer publicly accessible
     pub fun createSaleOffer (
-        sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider, DimeCollectible.DimeCollectionPublic}>,
+        sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
         itemId: UInt64,
         creator: Address,
         content: String,
@@ -244,4 +240,3 @@ pub contract DimeMarket {
         self.CollectionPublicPath = /public/DimeMarketCollection
     }
 }
- 
