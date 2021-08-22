@@ -41,7 +41,7 @@ pub contract DimeMarket {
         pub let itemId: UInt64
         pub let creator: Address
         pub let content: String
-        pub let price: UFix64
+        pub var price: UFix64
     }
 
     // A DimeCollectible NFT being offered to sale for a set fee
@@ -55,10 +55,37 @@ pub contract DimeMarket {
         pub let content: String
 
         // The sale payment price.
-        pub let price: UFix64
+        pub var price: UFix64
 
         // The collection containing that Id.
         access(self) let sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>
+
+        // Take the information required to create a sale offer: the capability
+        // to transfer the DimeCollectible NFT and the capability to receive payment
+        init(sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
+            itemId: UInt64, creator: Address, content: String, price: UFix64) {
+            pre {
+                sellerItemProvider.borrow() != nil: "Cannot borrow seller"
+            }
+
+            self.saleCompleted = false
+
+            let collectionRef = sellerItemProvider.borrow()!
+
+            self.sellerItemProvider = sellerItemProvider
+            self.itemId = itemId
+
+            self.price = price
+            self.creator = creator
+            self.content = content
+
+            emit SaleOfferCreated(itemId: self.itemId, price: self.price)
+        }
+
+        destroy() {
+            // Whether the sale completed or not, publicize that it is being withdrawn.
+            emit SaleOfferFinished(itemId: self.itemId)
+        }
 
         // Called by a purchaser to accept the sale offer.
         // As of now, there is no transfer of FTs for payment. Instead,
@@ -78,36 +105,8 @@ pub contract DimeMarket {
             emit SaleOfferAccepted(itemId: self.itemId)
         }
 
-        destroy() {
-            // Whether the sale completed or not, publicize that it is being withdrawn.
-            emit SaleOfferFinished(itemId: self.itemId)
-        }
-
-        // Take the information required to create a sale offer: the capability
-        // to transfer the DimeCollectible NFT and the capability to receive payment
-        init(
-            sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
-            itemId: UInt64,
-            creator: Address,
-            content: String,
-            price: UFix64
-        ) {
-            pre {
-                sellerItemProvider.borrow() != nil: "Cannot borrow seller"
-            }
-
-            self.saleCompleted = false
-
-            let collectionRef = sellerItemProvider.borrow()!
-
-            self.sellerItemProvider = sellerItemProvider
-            self.itemId = itemId
-
-            self.price = price
-            self.creator = creator
-            self.content = content
-
-            emit SaleOfferCreated(itemId: self.itemId, price: self.price)
+        pub fun setPrice(newPrice: UFix64) {
+            self.price = newPrice
         }
     }
 
@@ -204,6 +203,15 @@ pub contract DimeMarket {
             offer.accept(buyerCollection: buyerCollection)
             //FIXME: Is this correct? Or should we return it to the caller to dispose of?
             destroy offer
+        }
+
+        pub fun changePrice(itemId: UInt64, newPrice: UFix64) {
+            pre {
+                self.saleOffers[itemId] != nil: "SaleOffer does not exist in the collection!"
+            }
+            let offer <- self.remove(itemId: itemId)
+            offer.setPrice(newPrice: newPrice)
+            self.insert(offer: <- offer)
         }
 
         // Returns an array of the Ids that are in the collection
