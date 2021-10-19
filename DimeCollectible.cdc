@@ -1,4 +1,4 @@
-import NonFungibleToken from 0x631e88ae7f1d7c20
+import NonFungibleToken from 0x631e88ae7f1d7c20 // testnet | 0x1d7e57aa55817448 mainnet
 
 pub contract DimeCollectible: NonFungibleToken {
 
@@ -16,6 +16,7 @@ pub contract DimeCollectible: NonFungibleToken {
 
 	// The total number of DimeCollectibles that have been minted
 	pub var totalSupply: UInt64
+    pub var mintedTokens: [UInt64]
 
 	// DimeCollectible as a NFT
 	pub resource NFT: NonFungibleToken.INFT {
@@ -25,14 +26,23 @@ pub contract DimeCollectible: NonFungibleToken {
 		pub let creator: Address
 		// The url corresponding to the token's content
 		pub let content: String
+        // Is the token tradeable, or is it locked to its current owner?
+        pub var tradeable: Bool
+        // A chronological list of the owners of the token
+        pub var history: [[AnyStruct]]
 
-		// initializer
-		//
-		init(initID: UInt64, initCreator: Address, initContent: String) {
+		init(initID: UInt64, initCreator: Address, initContent: String, tradeable: Bool, firstOwner: Address) {
 			self.id = initID
 			self.creator = initCreator
 			self.content = initContent
+            self.tradeable = tradeable
+            self.history = [[firstOwner]]
 		}
+
+        pub fun addSale(toUser: Address, atPrice: UFix64) {
+            let newEntry: [AnyStruct] = [toUser, atPrice]
+            self.history.append(newEntry)
+        }
 	}
 
 	// This is the interface that users can cast their Collection as
@@ -41,7 +51,6 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub resource interface DimeCollectionPublic {
 		pub fun deposit(token: @NonFungibleToken.NFT)
 		pub fun getIDs(): [UInt64]
-		pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT
 		pub fun borrowCollectible(id: UInt64): &DimeCollectible.NFT? {
 			// If the result isn't nil, the id of the returned reference
 			// should be the same as the argument to the function
@@ -111,7 +120,7 @@ pub contract DimeCollectible: NonFungibleToken {
 		init () {
 			self.ownedNFTs <- {}
 		}
-	}
+}
 
 	// Public function that anyone can call to create a new empty collection
 	pub fun createEmptyCollection(): @NonFungibleToken.Collection {
@@ -122,12 +131,16 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub resource NFTMinter {
 		// Mints an NFT with a new ID and deposits it in the recipient's
 		// collection using their collection reference
-		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64, creator: Address, content: String) {
-			emit Minted(id: tokenId)
+		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64, creator: Address, content: String, tradeable: Bool) {
+            assert(!DimeCollectible.mintedTokens.contains(tokenId), message: "A token with that ID already exists")
+            DimeCollectible.mintedTokens.append(tokenId)
 
-			// deposit it in the collection using the reference
-			collection.deposit(token: <-create DimeCollectible.NFT(initID: tokenId, creatorInit: creator, contentInit: content))
+			// Deposit it in the collection using the reference
+            let firstOwner = collection.owner!.address
+			collection.deposit(token: <- create DimeCollectible.NFT(initID: tokenId, creatorInit: creator, contentInit: content, tradeable: tradeable, firstOwner: firstOwner))
 			DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
+
+			emit Minted(id: tokenId)
 		}
 	}
 
@@ -153,6 +166,7 @@ pub contract DimeCollectible: NonFungibleToken {
 
 		// Initialize the total supply
 		self.totalSupply = 0
+        self.mintedTokens = []
 
 		// Create a Minter resource and save it to storage.
 		// Create a public link so all users can use the same global one
