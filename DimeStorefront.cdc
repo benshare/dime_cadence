@@ -43,7 +43,16 @@ pub contract DimeStorefront {
         pub let itemId: UInt64
         pub let creator: Address
         pub let content: String
+        pub let history: [[AnyStruct]]
+        
         pub var price: UFix64
+
+        pub fun acceptWithFUSD(payment: @FUSD.Vault,
+            buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver},
+        )
+        pub fun accept(
+            buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver}
+        )
     }
 
     // A DimeCollectible NFT being offered to sale for a set fee
@@ -55,11 +64,12 @@ pub contract DimeStorefront {
         pub let itemId: UInt64
         pub let creator: Address
         pub let content: String
+        pub let history: [[AnyStruct]]
 
         // The sale payment price, in dollars
         pub var price: UFix64
         // The vault that will be paid when the item is purchased
-        pub let receiver: &FUSD.Vault{FungibleToken.Receiver}
+        access(self) let receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 
         // The fraction of the price that goes to Dime
         pub let dimeRoyalty: UFix64
@@ -86,9 +96,10 @@ pub contract DimeStorefront {
 
             self.saleCompleted = true
 
-            let nft <- self.sellerItemProvider.borrow()!.withdraw(withdrawID: self.itemId) as! @DimeCollectible.NFT
+            let nft <- self.sellerItemProvider.borrow()!.withdraw(withdrawID: self.itemId)
             assert(nft.isInstance(DimeCollectible.NFT.getType()), message: "Provided NFT is not of the correct type")
             assert(nft.id == self.itemId, message: "Provided NFT does not have the correct ID")
+            let dimeNft <- nft as! @DimeCollectible.NFT
             
             let dimeCut = self.price * self.dimeRoyalty
             let dimePayment <- payment.withdraw(amount: dimeCut)
@@ -100,16 +111,16 @@ pub contract DimeStorefront {
             
             let creatorCut = self.price * self.creatorRoyalty
             let creatorPayment <- payment.withdraw(amount: creatorCut)
-            let creatorAccount = getAccount(nft.creator)
+            let creatorAccount = getAccount(dimeNft.creator)
             let creatorRef = creatorAccount.getCapability(/public/fusdReceiver)
                 .borrow<&{FungibleToken.Receiver}>()
                 ?? panic("Could not borrow reference to the creator's vault")
             creatorRef.deposit(from: <- creatorPayment)
 
-            self.receiver.deposit(from: <- payment)
+            self.receiver.borrow()!.deposit(from: <- payment)
 
-            nft.addSale(toUser: buyerCollection.owner!.address, atPrice: self.price)
-            buyerCollection.deposit(token: <-nft)
+            dimeNft.addSale(toUser: buyerCollection.owner!.address, atPrice: self.price)
+            buyerCollection.deposit(token: <- (dimeNft as! @NonFungibleToken.NFT))
 
             emit SaleOfferAccepted(itemId: self.itemId)
         }
@@ -118,35 +129,37 @@ pub contract DimeStorefront {
         // Dime admin account. The purpose of this is to simulate the exchange of
         // fiat for FUSD. Dime handles the transfer of non-token currency prior to calling
         // this version of accept.
-        pub fun accept(signature: [UInt8],
+        pub fun accept(
             buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver}
         ) {
             pre {
-                self.saleCompleted == false: "the sale offer has already been accepted"
+                self.saleCompleted == false: "The sale offer has already been accepted"
             }
 
             // We confirm that the caller is the Dime admin by using the Dime public key
             // to verify the provided signature. We'll use the item ID being bought
             // as the agreed-upon plaintext to verify.
-            let key: PublicKey = PublicKey(
-                publicKey: DimeStorefront.verificationKey,
-                signatureAlgorithm: SignatureAlgorithm.ECDSA_P256
-            )
-            let isValid = key.verify(signature: signature,
-                signedData: self.itemId.toString().decodeHex(),
-                domainSeparationTag: "",
-                hashAlgorithm: HashAlgorithm.SHA3_256)
-            assert(isValid, message: "Only the Dime admin account can call this version of accept")
+            // let key: PublicKey = PublicKey(
+            //     publicKey: DimeStorefront.verificationKey,
+            //     signatureAlgorithm: SignatureAlgorithm.ECDSA_P256
+            // )
+
+            // let isValid = key.verify(signature: signature,
+            //     signedData: self.itemId.toString().decodeHex(),
+            //     domainSeparationTag: "",
+            //     hashAlgorithm: HashAlgorithm.SHA3_256)
+            // assert(isValid, message: "Only the Dime admin account can call this version of accept")
 
             self.saleCompleted = true
 
-            let nft <- self.sellerItemProvider.borrow()!.withdraw(withdrawID: self.itemId) as! @DimeCollectible.NFT
-            assert(nft.isInstance(DimeCollectible.NFT.getType()), message: "Provided NFT is not of the correct type")
+            let nft <- self.sellerItemProvider.borrow()!.withdraw(withdrawID: self.itemId)
+            // assert(nft.isInstance(DimeCollectible.NFT.getType()), message: nft.getType().identifier.concat(" is not an instance of ").concat(DimeCollectible.NFT.getType().identifier))
             assert(nft.id == self.itemId, message: "Provided NFT does not have the correct ID")
+            let dimeNft <- nft as! @DimeCollectible.NFT
 
 
-            nft.addSale(toUser: buyerCollection.owner!.address, atPrice: self.price)
-            buyerCollection.deposit(token: <-nft)
+            dimeNft.addSale(toUser: buyerCollection.owner!.address, atPrice: self.price)
+            buyerCollection.deposit(token: <- (dimeNft as! @NonFungibleToken.NFT))
 
             emit SaleOfferAccepted(itemId: self.itemId)
         }
@@ -154,9 +167,9 @@ pub contract DimeStorefront {
         // Take the information required to create a sale offer: the capability
         // to transfer the DimeCollectible NFT and the capability to receive payment
         init(sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
-            itemId: UInt64, creator: Address, content: String, price: UFix64, receiver: &FUSD.Vault{FungibleToken.Receiver}) {
+            itemId: UInt64, creator: Address, content: String, price: UFix64, history: [[AnyStruct]], receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
             pre {
-                sellerItemProvider.borrow() != nil: "Cannot borrow seller"
+                sellerItemProvider.borrow() != nil: "Cannot borrow collection from seller"
             }
 
             self.saleCompleted = false
@@ -169,6 +182,7 @@ pub contract DimeStorefront {
             self.price = price
             self.creator = creator
             self.content = content
+            self.history = history
 
             self.receiver = receiver
             self.creatorRoyalty = 0.01
@@ -182,25 +196,6 @@ pub contract DimeStorefront {
         }
     }
 
-    // Make creating a SaleOffer publicly accessible
-    pub fun createSaleOffer(
-        sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
-        itemId: UInt64, creator: Address, content: String, price: UFix64, receiver: &FUSD.Vault): @SaleOffer {
-        let nft = sellerItemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
-        if (!nft.tradeable) {
-            panic("Tried to put an untradeable token on sale")
-        }
-    
-        return <-create SaleOffer(
-            sellerItemProvider: sellerItemProvider,
-            itemId: itemId,
-            creator: creator,
-            content: content,
-            price: price,
-            receiver: receiver
-        )
-    }
-
     // An interface for adding and removing SaleOffers to a collection, intended for
     // use by the collection's owner
     pub resource interface StorefrontManager {
@@ -210,7 +205,8 @@ pub contract DimeStorefront {
             creator: Address,
             content: String,
             price: UFix64,
-            receiver: &FUSD.Vault
+            history: [[AnyStruct]],
+            receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
         )
         pub fun removeSaleOffer(itemId: UInt64)
         pub fun changePrice(itemId: UInt64, newPrice: UFix64)
@@ -247,7 +243,8 @@ pub contract DimeStorefront {
             creator: Address,
             content: String,
             price: UFix64,
-            receiver: &FUSD.Vault
+            history: [[AnyStruct]],
+            receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
         ) {
             let nft = sellerItemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
             if (!nft.tradeable) {
@@ -260,6 +257,7 @@ pub contract DimeStorefront {
                 creator: creator,
                 content: content,
                 price: price,
+                history: history,
                 receiver: receiver
             )
 
@@ -283,18 +281,24 @@ pub contract DimeStorefront {
             destroy offer
         }
 
-        access(contract) fun insert(offer: @SaleOffer) {
+        access(contract) fun push(offer: @SaleOffer) {
             let oldOffer <- self.saleOffers[offer.itemId] <- offer
             destroy oldOffer
         }
 
+        access(contract) fun pop(itemId: UInt64): @SaleOffer? {
+            let offer <- self.saleOffers.remove(key: itemId)
+            return <- offer
+        }
+
         pub fun changePrice(itemId: UInt64, newPrice: UFix64) {
             pre {
-                self.saleOffers[itemId] != nil: "SaleOffer does not exist in the collection!"
+                self.saleOffers[itemId] != nil: "Tried to change price of an item that's not on sale"
             }
-            let offer <-(self.saleOffers.remove(key: itemId) ?? panic("missing SaleOffer"))
+
+            let offer <- self.pop(itemId: itemId)!
             offer.setPrice(newPrice: newPrice)
-            self.insert(offer: <- offer)
+            self.push(offer: <- offer)
         }
 
         destroy () {
