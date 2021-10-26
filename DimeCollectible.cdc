@@ -26,15 +26,18 @@ pub contract DimeCollectible: NonFungibleToken {
 		pub let creator: Address
 		// The url corresponding to the token's content
 		pub let content: String
+		// The url corresponding to the token's hidden content
+		pub let hiddenContent: String?
         // Is the token tradeable, or is it locked to its current owner?
         pub var tradeable: Bool
         // A chronological list of the owners of the token
         pub var history: [[AnyStruct]]
 
-		init(initID: UInt64, initCreator: Address, initContent: String, tradeable: Bool, firstOwner: Address) {
-			self.id = initID
-			self.creator = initCreator
-			self.content = initContent
+		init(id: UInt64, creator: Address, content: String, hiddenContent: String?, tradeable: Bool, firstOwner: Address) {
+			self.id = id
+			self.creator = creator
+			self.content = content
+            self.hiddenContent = hiddenContent
             self.tradeable = tradeable
             self.history = [[firstOwner]]
 		}
@@ -123,7 +126,7 @@ pub contract DimeCollectible: NonFungibleToken {
 }
 
 	// Public function that anyone can call to create a new empty collection
-	pub fun createEmptyCollection(): @NonFungibleToken.Collection {
+	pub fun createEmptyCollection(): @DimeCollectible.Collection {
 		return <- create Collection()
 	}
 
@@ -131,13 +134,13 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub resource NFTMinter {
 		// Mints an NFT with a new ID and deposits it in the recipient's
 		// collection using their collection reference
-		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64, creator: Address, content: String, tradeable: Bool) {
+		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64, creator: Address, content: String, hiddenContent: String?, tradeable: Bool) {
             assert(!DimeCollectible.mintedTokens.contains(tokenId), message: "A token with that ID already exists")
             DimeCollectible.mintedTokens.append(tokenId)
 
 			// Deposit it in the collection using the reference
             let firstOwner = collection.owner!.address
-			collection.deposit(token: <- create DimeCollectible.NFT(initID: tokenId, creatorInit: creator, contentInit: content, tradeable: tradeable, firstOwner: firstOwner))
+			collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creator: creator, content: content, hiddenContent: hiddenContent, tradeable: tradeable, firstOwner: firstOwner))
 			DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
 
 			emit Minted(id: tokenId)
@@ -170,9 +173,9 @@ pub contract DimeCollectible: NonFungibleToken {
 
 		// Create a Minter resource and save it to storage.
 		// Create a public link so all users can use the same global one
-		let minter <- create NFTMinter()
-		self.account.save(<- minter, to: self.MinterStoragePath)
-		self.account.link<&NFTMinter>(self.MinterPublicPath, target: self.MinterStoragePath)
+		// let minter <- create NFTMinter()
+		// self.account.save(<- minter, to: self.MinterStoragePath)
+		// self.account.link<&NFTMinter>(self.MinterPublicPath, target: self.MinterStoragePath)
 
 		emit ContractInitialized()
 	}
