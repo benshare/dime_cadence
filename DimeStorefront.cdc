@@ -1,7 +1,7 @@
-import NonFungibleToken from 0x631e88ae7f1d7c20 // testnet | 0x1d7e57aa55817448 mainnet
-import DimeCollectible from 0x056a9cc93a020fad // testnet | 0xa233bed832a43947 mainnet
-import FUSD from 0xe223d8a629e49c68 // testnet | 0x3c5959b568896393 mainnet
-import FungibleToken from 0x9a0766d93b6608b7 // testnet | 0xf233dcee88fe0abe mainnet
+import NonFungibleToken from 0x1d7e57aa55817448
+import DimeCollectible from 0xa233bed832a43947
+import FUSD from 0x3c5959b568896393
+import FungibleToken from 0xf233dcee88fe0abe
 
 /*
     This contract allows:
@@ -33,7 +33,6 @@ pub contract DimeStorefront {
       price: UFix64
     )
 
-    pub let verificationKey: [UInt8]
     // Named paths
     pub let StorefrontStoragePath: StoragePath
     pub let StorefrontPublicPath: PublicPath
@@ -44,15 +43,7 @@ pub contract DimeStorefront {
         pub let creator: Address
         pub let content: String
         pub let history: [[AnyStruct]]
-        
         pub var price: UFix64
-
-        pub fun acceptWithFUSD(payment: @FUSD.Vault,
-            buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver},
-        )
-        pub fun accept(
-            buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver}
-        )
     }
 
     // A DimeCollectible NFT being offered to sale for a set fee
@@ -68,7 +59,9 @@ pub contract DimeStorefront {
 
         // The sale payment price, in dollars
         pub var price: UFix64
-        // The vault that will be paid when the item is purchased
+        // The vault that will be paid when the item is purchased.
+        // This isn't used right now since FUSD payments are not enabled,
+        // but keeping for future compatibility
         access(self) let receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 
         // The fraction of the price that goes to Dime
@@ -84,90 +77,10 @@ pub contract DimeStorefront {
             emit SaleOfferFinished(itemId: self.itemId)
         }
 
-        // Called by a purchaser to accept the sale offer. We only accept payment
-        // in FUSD.
-        pub fun acceptWithFUSD(payment: @FUSD.Vault,
-            buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver},
-        ) {
-            pre {
-                self.saleCompleted == false: "The sale offer has already been accepted"
-                payment.balance == self.price: "Payment vault does not contain the required price"
-            }
-
-            self.saleCompleted = true
-
-            let nft <- self.sellerItemProvider.borrow()!.withdraw(withdrawID: self.itemId)
-            assert(nft.isInstance(DimeCollectible.NFT.getType()), message: "Provided NFT is not of the correct type")
-            assert(nft.id == self.itemId, message: "Provided NFT does not have the correct ID")
-            let dimeNft <- nft as! @DimeCollectible.NFT
-            
-            let dimeCut = self.price * self.dimeRoyalty
-            let dimePayment <- payment.withdraw(amount: dimeCut)
-            let dimeAccount = getAccount(0x631e88ae7f1d7c20)
-            let dimeRef = dimeAccount.getCapability(/public/fusdReceiver)
-                .borrow<&{FungibleToken.Receiver}>()
-                ?? panic("Could not borrow reference to the Dime admin's vault")
-            dimeRef.deposit(from: <- dimePayment)
-            
-            let creatorCut = self.price * self.creatorRoyalty
-            let creatorPayment <- payment.withdraw(amount: creatorCut)
-            let creatorAccount = getAccount(dimeNft.creator)
-            let creatorRef = creatorAccount.getCapability(/public/fusdReceiver)
-                .borrow<&{FungibleToken.Receiver}>()
-                ?? panic("Could not borrow reference to the creator's vault")
-            creatorRef.deposit(from: <- creatorPayment)
-
-            self.receiver.borrow()!.deposit(from: <- payment)
-
-            dimeNft.addSale(toUser: buyerCollection.owner!.address, atPrice: self.price)
-            buyerCollection.deposit(token: <- (dimeNft as! @NonFungibleToken.NFT))
-
-            emit SaleOfferAccepted(itemId: self.itemId)
-        }
-
-        // Transfers the token without payment. Requires a key, which is owned by the
-        // Dime admin account. The purpose of this is to simulate the exchange of
-        // fiat for FUSD. Dime handles the transfer of non-token currency prior to calling
-        // this version of accept.
-        pub fun accept(
-            buyerCollection: &DimeCollectible.Collection{NonFungibleToken.Receiver}
-        ) {
-            pre {
-                self.saleCompleted == false: "The sale offer has already been accepted"
-            }
-
-            // We confirm that the caller is the Dime admin by using the Dime public key
-            // to verify the provided signature. We'll use the item ID being bought
-            // as the agreed-upon plaintext to verify.
-            // let key: PublicKey = PublicKey(
-            //     publicKey: DimeStorefront.verificationKey,
-            //     signatureAlgorithm: SignatureAlgorithm.ECDSA_P256
-            // )
-
-            // let isValid = key.verify(signature: signature,
-            //     signedData: self.itemId.toString().decodeHex(),
-            //     domainSeparationTag: "",
-            //     hashAlgorithm: HashAlgorithm.SHA3_256)
-            // assert(isValid, message: "Only the Dime admin account can call this version of accept")
-
-            self.saleCompleted = true
-
-            let nft <- self.sellerItemProvider.borrow()!.withdraw(withdrawID: self.itemId)
-            // assert(nft.isInstance(DimeCollectible.NFT.getType()), message: nft.getType().identifier.concat(" is not an instance of ").concat(DimeCollectible.NFT.getType().identifier))
-            assert(nft.id == self.itemId, message: "Provided NFT does not have the correct ID")
-            let dimeNft <- nft as! @DimeCollectible.NFT
-
-
-            dimeNft.addSale(toUser: buyerCollection.owner!.address, atPrice: self.price)
-            buyerCollection.deposit(token: <- (dimeNft as! @NonFungibleToken.NFT))
-
-            emit SaleOfferAccepted(itemId: self.itemId)
-        }
-
-        // Take the information required to create a sale offer: the capability
-        // to transfer the DimeCollectible NFT and the capability to receive payment
+        // Take the information required to create a sale offer
         init(sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
-            itemId: UInt64, creator: Address, content: String, price: UFix64, history: [[AnyStruct]], receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
+            itemId: UInt64, creator: Address, content: String, price: UFix64, history: [[AnyStruct]],
+            receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
             pre {
                 sellerItemProvider.borrow() != nil: "Cannot borrow collection from seller"
             }
@@ -316,8 +229,6 @@ pub contract DimeStorefront {
     }
 
     init () {
-        self.verificationKey = "745f2b97ba96cadc00ff9ac3763c85d675352a35aec9f058403b18c9e8a623f61e657ba2ce5073b9a96076ebfe28d3c8e2e846ae8d53d14c4c5e5bf37794483b".decodeHex()
-
         self.StorefrontStoragePath = /storage/DimeStorefrontCollection
         self.StorefrontPublicPath = /public/DimeStorefrontCollection
     }
