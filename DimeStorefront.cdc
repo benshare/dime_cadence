@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: UNLICENSED */
+
 import NonFungibleToken from 0x1d7e57aa55817448
 import DimeCollectible from 0xa233bed832a43947
 import FUSD from 0x3c5959b568896393
