@@ -44,7 +44,6 @@ pub contract DimeStorefront {
         pub let itemId: UInt64
         pub let creator: Address
         pub let content: String
-        pub let history: [[AnyStruct]]
         pub var price: UFix64
     }
 
@@ -57,7 +56,7 @@ pub contract DimeStorefront {
         pub let itemId: UInt64
         pub let creator: Address
         pub let content: String
-        pub let history: [[AnyStruct]]
+        access(self) let history: [[AnyStruct]]
 
         // The sale payment price, in dollars
         pub var price: UFix64
@@ -190,9 +189,13 @@ pub contract DimeStorefront {
         }
 
         // Remove and return a SaleOffer from the collection
-        pub fun removeSaleOffer(itemId: UInt64) {
+        pub fun removeSaleOffer(itemId: UInt64, beingPurchased: Bool) {
             let offer <- (self.saleOffers.remove(key: itemId) ?? panic("missing SaleOffer"))
-            emit SaleOfferRemoved(itemId: itemId, owner: self.owner?.address!)
+            if beingPurchased {
+                emit SaleOfferAccepted(itemId: itemId)
+            } else {
+                emit SaleOfferRemoved(itemId: itemId, owner: self.owner?.address!)
+            }
             destroy offer
         }
 
