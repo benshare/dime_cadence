@@ -18,7 +18,7 @@ pub contract DimeCollectible: NonFungibleToken {
 
 	// The total number of DimeCollectibles that have been minted
 	pub var totalSupply: UInt64
-    pub var mintedTokens: [UInt64]
+    access(self) var mintedTokens: [UInt64]
 
 	// DimeCollectible as a NFT
 	pub resource NFT: NonFungibleToken.INFT {
@@ -33,7 +33,7 @@ pub contract DimeCollectible: NonFungibleToken {
         // Is the token tradeable, or is it locked to its current owner?
         pub var tradeable: Bool
         // A chronological list of the owners of the token
-        pub var history: [[AnyStruct]]
+        access(self) var history: [[AnyStruct]]
 
 		init(id: UInt64, creator: Address, content: String, hiddenContent: String?, tradeable: Bool, firstOwner: Address) {
 			self.id = id
@@ -44,7 +44,7 @@ pub contract DimeCollectible: NonFungibleToken {
             self.history = [[firstOwner]]
 		}
 
-        pub fun addSale(toUser: Address, atPrice: UFix64) {
+        access(self) fun addSale(toUser: Address, atPrice: UFix64) {
             let newEntry: [AnyStruct] = [toUser, atPrice]
             self.history.append(newEntry)
         }
@@ -64,6 +64,7 @@ pub contract DimeCollectible: NonFungibleToken {
 					"Cannot borrow reference: The ID of the returned reference is incorrect"
 			}
 		}
+        pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT
 	}
 
 	// Collection
