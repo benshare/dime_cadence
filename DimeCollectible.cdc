@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: UNLICENSED */
+
 import NonFungibleToken from 0x1d7e57aa55817448
 
 pub contract DimeCollectible: NonFungibleToken {
