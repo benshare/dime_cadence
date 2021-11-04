@@ -15,227 +15,231 @@ import NonFungibleToken from "./NonFungibleToken.cdc"
 
 pub contract DimeStorefront {
 
-    // SaleOffer events
-    // A sale offer has been created.
-    pub event SaleOfferCreated(itemId: UInt64, price: UFix64)
-    // Someone has purchased an item that was offered for sale.
-    pub event SaleOfferAccepted(itemId: UInt64)
-    // A sale offer has been destroyed, with or without being accepted.
-    pub event SaleOfferFinished(itemId: UInt64)
+	// SaleOffer events
+	// A sale offer has been created.
+	pub event SaleOfferCreated(itemId: UInt64, price: UFix64)
+	// Someone has purchased an item that was offered for sale.
+	pub event SaleOfferAccepted(itemId: UInt64)
+	// A sale offer has been destroyed, with or without being accepted.
+	pub event SaleOfferFinished(itemId: UInt64)
 
-    // A sale offer has been removed from the collection of Address.
-    pub event SaleOfferRemoved(itemId: UInt64, owner: Address)
+	// A sale offer has been removed from the collection of Address.
+	pub event SaleOfferRemoved(itemId: UInt64, owner: Address)
 
-    // A sale offer has been inserted into the collection of Address.
-    pub event SaleOfferAdded(
-      itemId: UInt64,
-      creator: Address,
-      content: String,
-      owner: Address,
-      price: UFix64
-    )
+	// A sale offer has been inserted into the collection of Address.
+	pub event SaleOfferAdded(
+		itemId: UInt64,
+		creator: Address,
+		content: String,
+		owner: Address,
+		price: UFix64
+	)
 
-    // Named paths
-    pub let StorefrontStoragePath: StoragePath
-    pub let StorefrontPublicPath: PublicPath
+	// Named paths
+	pub let StorefrontStoragePath: StoragePath
+	pub let StorefrontPublicPath: PublicPath
 
-    // An interface providing a read-only view of a SaleOffer
-    pub resource interface SaleOfferPublic {
-        pub let itemId: UInt64
-        pub let creator: Address
-        pub let content: String
-        pub var price: UFix64
-    }
+	// An interface providing a read-only view of a SaleOffer
+	pub resource interface SaleOfferPublic {
+		pub let itemId: UInt64
+		pub let creator: Address
+		pub let content: String
+		pub var price: UFix64
 
-    // A DimeCollectible NFT being offered to sale for a set fee
-    pub resource SaleOffer: SaleOfferPublic {
-        // Whether the sale has completed with someone purchasing the item.
-        pub var saleCompleted: Bool
+		pub fun getHistory(): [[AnyStruct]]
+	}
 
-        // The NFT for sale.
-        pub let itemId: UInt64
-        pub let creator: Address
-        pub let content: String
-        access(self) let history: [[AnyStruct]]
+	// A DimeCollectible NFT being offered to sale for a set fee
+	pub resource SaleOffer: SaleOfferPublic {
+		// Whether the sale has completed with someone purchasing the item.
+		pub var saleCompleted: Bool
 
-        // The sale payment price, in dollars
-        pub var price: UFix64
-        // The vault that will be paid when the item is purchased.
-        // This isn't used right now since FUSD payments are not enabled,
-        // but keeping for future compatibility
-        access(self) let receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
+		// The NFT for sale.
+		pub let itemId: UInt64
+		pub let creator: Address
+		pub let content: String
+		pub var price: UFix64
+		access(self) let history: [[AnyStruct]]
 
-        // The fraction of the price that goes to Dime
-        pub let dimeRoyalty: UFix64
-        // The fraction of the price that goes to the original creator
-        pub let creatorRoyalty: UFix64
+		pub fun getHistory(): [[AnyStruct]] {
+			return self.history
+		}
 
-        // The collection containing that Id.
-        access(self) let sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>
+		// The vault that will be paid when the item is purchased.
+		// This isn't used right now since FUSD payments are not enabled,
+		// but keeping for future compatibility
+		access(self) let receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 
-        destroy() {
-            // Whether the sale completed or not, publicize that it is being withdrawn.
-            emit SaleOfferFinished(itemId: self.itemId)
-        }
+		// The fraction of the price that goes to Dime
+		pub let dimeRoyalty: UFix64
+		// The fraction of the price that goes to the original creator
+		pub let creatorRoyalty: UFix64
 
-        // Take the information required to create a sale offer
-        init(sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
-            itemId: UInt64, creator: Address, content: String, price: UFix64, history: [[AnyStruct]],
-            receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
-            pre {
-                sellerItemProvider.borrow() != nil: "Cannot borrow collection from seller"
-            }
+		// The collection containing that ID.
+		access(self) let sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>
 
-            self.saleCompleted = false
+		destroy() {
+			// Whether the sale completed or not, publicize that it is being withdrawn.
+			emit SaleOfferFinished(itemId: self.itemId)
+		}
 
-            let collectionRef = sellerItemProvider.borrow()!
+		// Take the information required to create a sale offer
+		init(sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
+			itemId: UInt64, creator: Address, content: String, price: UFix64, history: [[AnyStruct]],
+			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
+			pre {
+				sellerItemProvider.borrow() != nil: "Cannot borrow collection from seller"
+			}
 
-            self.sellerItemProvider = sellerItemProvider
-            self.itemId = itemId
+			self.saleCompleted = false
 
-            self.price = price
-            self.creator = creator
-            self.content = content
-            self.history = history
+			let collectionRef = sellerItemProvider.borrow()!
 
-            self.receiver = receiver
-            self.creatorRoyalty = 0.01
-            self.dimeRoyalty = 0.01
+			self.sellerItemProvider = sellerItemProvider
+			self.itemId = itemId
 
-            emit SaleOfferCreated(itemId: self.itemId, price: self.price)
-        }
+			self.price = price
+			self.creator = creator
+			self.content = content
+			self.history = history
 
-        pub fun setPrice(newPrice: UFix64) {
-            self.price = newPrice
-        }
-    }
+			self.receiver = receiver
+			self.creatorRoyalty = 0.01
+			self.dimeRoyalty = 0.01
 
-    // An interface for adding and removing SaleOffers to a collection, intended for
-    // use by the collection's owner
-    pub resource interface StorefrontManager {
-        pub fun createSaleOffer(
-            sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
-            itemId: UInt64,
-            creator: Address,
-            content: String,
-            price: UFix64,
-            history: [[AnyStruct]],
-            receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
-        )
-        pub fun removeSaleOffer(itemId: UInt64)
-        pub fun changePrice(itemId: UInt64, newPrice: UFix64)
-    }
+			emit SaleOfferCreated(itemId: self.itemId, price: self.price)
+		}
 
-    // An interface to allow listing and borrowing SaleOffers, and purchasing items via SaleOffers in a collection
-    pub resource interface StorefrontPublic {
-        pub fun getSaleOfferIds(): [UInt64]
-        pub fun borrowSaleOffer(itemId: UInt64): &SaleOffer{SaleOfferPublic}?
-   }
+		pub fun setPrice(newPrice: UFix64) {
+			self.price = newPrice
+		}
+	}
 
-    // A resource that allows its owner to manage a list of SaleOffers, and purchasers to interact with them
-    pub resource Storefront : StorefrontManager, StorefrontPublic {
-        access(self) var saleOffers: @{UInt64: SaleOffer}
+	// An interface for adding and removing SaleOffers to a collection, intended for
+	// use by the collection's owner
+	pub resource interface StorefrontManager {
+		pub fun createSaleOffer(
+			sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			itemId: UInt64,
+			creator: Address,
+			content: String,
+			price: UFix64,
+			history: [[AnyStruct]],
+			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
+		)
+		pub fun removeSaleOffer(itemId: UInt64, beingPurchased: Bool)
+		pub fun changePrice(itemId: UInt64, newPrice: UFix64)
+	}
 
-        // Returns an array of the Ids that are in the collection
-        pub fun getSaleOfferIds(): [UInt64] {
-            return self.saleOffers.keys
-        }
+	// An interface to allow listing and borrowing SaleOffers, and purchasing items via SaleOffers in a collection
+	pub resource interface StorefrontPublic {
+		pub fun getSaleOfferIds(): [UInt64]
+		pub fun borrowSaleOffer(itemId: UInt64): &SaleOffer{SaleOfferPublic}?
+   	}
 
-        // Returns an Optional read-only view of the SaleItem for the given itemId if it is contained by this collection.
-        // The optional will be nil if the provided itemId is not present in the collection.
-        pub fun borrowSaleOffer(itemId: UInt64): &SaleOffer{SaleOfferPublic}? {
-            if self.saleOffers[itemId] == nil {
-                return nil
-            }
-            return &self.saleOffers[itemId] as &SaleOffer{SaleOfferPublic}
-        }
+	// A resource that allows its owner to manage a list of SaleOffers, and purchasers to interact with them
+	pub resource Storefront : StorefrontManager, StorefrontPublic {
+		access(self) var saleOffers: @{UInt64: SaleOffer}
 
-        // Insert a SaleOffer into the collection, replacing one with the same itemId if present
-        pub fun createSaleOffer(
-            sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
-            itemId: UInt64,
-            creator: Address,
-            content: String,
-            price: UFix64,
-            history: [[AnyStruct]],
-            receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
-        ) {
-            let nft = sellerItemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
-            if (!nft.tradeable) {
-                panic("Tried to put an untradeable token on sale")
-            }
-        
-            let newOffer <- create SaleOffer(
-                sellerItemProvider: sellerItemProvider,
-                itemId: itemId,
-                creator: creator,
-                content: content,
-                price: price,
-                history: history,
-                receiver: receiver
-            )
+		// Returns an array of the Ids that are in the collection
+		pub fun getSaleOfferIds(): [UInt64] {
+			return self.saleOffers.keys
+		}
 
-            // Add the new offer to the dictionary, overwriting an old one if it exists
-            let oldOffer <- self.saleOffers[itemId] <- newOffer
-            destroy oldOffer
+		// Returns an Optional read-only view of the SaleItem for the given itemId if it is contained by this collection.
+		// The optional will be nil if the provided itemId is not present in the collection.
+		pub fun borrowSaleOffer(itemId: UInt64): &SaleOffer{SaleOfferPublic}? {
+			if self.saleOffers[itemId] == nil {
+				return nil
+			}
+			return &self.saleOffers[itemId] as &SaleOffer{SaleOfferPublic}
+		}
 
-            emit SaleOfferAdded(
-              itemId: itemId,
-              creator: creator,
-              content: content,
-              owner: self.owner?.address!,
-              price: price
-            )
-        }
+		// Insert a SaleOffer into the collection, replacing one with the same itemId if present
+		pub fun createSaleOffer(
+			sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			itemId: UInt64,
+			creator: Address,
+			content: String,
+			price: UFix64,
+			history: [[AnyStruct]],
+			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
+		) {
+			let nft = sellerItemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
+			if (!nft.tradeable) {
+				panic("Tried to put an untradeable token on sale")
+			}
+		
+			let newOffer <- create SaleOffer(
+				sellerItemProvider: sellerItemProvider,
+				itemId: itemId,
+				creator: creator,
+				content: content,
+				price: price,
+				history: history,
+				receiver: receiver
+			)
 
-        // Remove and return a SaleOffer from the collection
-        pub fun removeSaleOffer(itemId: UInt64, beingPurchased: Bool) {
-            let offer <- (self.saleOffers.remove(key: itemId) ?? panic("missing SaleOffer"))
-            if beingPurchased {
-                emit SaleOfferAccepted(itemId: itemId)
-            } else {
-                emit SaleOfferRemoved(itemId: itemId, owner: self.owner?.address!)
-            }
-            destroy offer
-        }
+			// Add the new offer to the dictionary, overwriting an old one if it exists
+			let oldOffer <- self.saleOffers[itemId] <- newOffer
+			destroy oldOffer
 
-        access(contract) fun push(offer: @SaleOffer) {
-            let oldOffer <- self.saleOffers[offer.itemId] <- offer
-            destroy oldOffer
-        }
+			emit SaleOfferAdded(
+			  itemId: itemId,
+			  creator: creator,
+			  content: content,
+			  owner: self.owner?.address!,
+			  price: price
+			)
+		}
 
-        access(contract) fun pop(itemId: UInt64): @SaleOffer? {
-            let offer <- self.saleOffers.remove(key: itemId)
-            return <- offer
-        }
+		// Remove and return a SaleOffer from the collection
+		pub fun removeSaleOffer(itemId: UInt64, beingPurchased: Bool) {
+			let offer <- (self.saleOffers.remove(key: itemId) ?? panic("missing SaleOffer"))
+			if beingPurchased {
+				emit SaleOfferAccepted(itemId: itemId)
+			} else {
+				emit SaleOfferRemoved(itemId: itemId, owner: self.owner?.address!)
+			}
+			destroy offer
+		}
 
-        pub fun changePrice(itemId: UInt64, newPrice: UFix64) {
-            pre {
-                self.saleOffers[itemId] != nil: "Tried to change price of an item that's not on sale"
-            }
+		access(contract) fun push(offer: @SaleOffer) {
+			let oldOffer <- self.saleOffers[offer.itemId] <- offer
+			destroy oldOffer
+		}
 
-            let offer <- self.pop(itemId: itemId)!
-            offer.setPrice(newPrice: newPrice)
-            self.push(offer: <- offer)
-        }
+		access(contract) fun pop(itemId: UInt64): @SaleOffer? {
+			let offer <- self.saleOffers.remove(key: itemId)
+			return <- offer
+		}
 
-        destroy () {
-            destroy self.saleOffers
-        }
+		pub fun changePrice(itemId: UInt64, newPrice: UFix64) {
+			pre {
+				self.saleOffers[itemId] != nil: "Tried to change price of an item that's not on sale"
+			}
 
-        init () {
-            self.saleOffers <- {}
-        }
+			let offer <- self.pop(itemId: itemId)!
+			offer.setPrice(newPrice: newPrice)
+			self.push(offer: <- offer)
+		}
+
+		destroy () {
+			destroy self.saleOffers
+		}
+
+		init () {
+			self.saleOffers <- {}
+		}
+	}
+
+	// Make creating a Storefront publicly accessible.
+	pub fun createStorefront(): @Storefront {
+		return <-create Storefront()
+	}
+
+	init () {
+		self.StorefrontStoragePath = /storage/DimeStorefrontCollection
+		self.StorefrontPublicPath = /public/DimeStorefrontCollection
+	}
 }
-
-    // Make creating a Storefront publicly accessible.
-    pub fun createStorefront(): @Storefront {
-        return <-create Storefront()
-    }
-
-    init () {
-        self.StorefrontStoragePath = /storage/DimeStorefrontCollection
-        self.StorefrontPublicPath = /public/DimeStorefrontCollection
-    }
-}
- 
