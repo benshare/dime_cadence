@@ -180,9 +180,9 @@ pub contract DimeCollectible: NonFungibleToken {
 
 		// Create a Minter resource and save it to storage.
 		// Create a public link so all users can use the same global one
-		// let minter <- create NFTMinter()
-		// self.account.save(<- minter, to: self.MinterStoragePath)
-		// self.account.link<&NFTMinter>(self.MinterPublicPath, target: self.MinterStoragePath)
+		let minter <- create NFTMinter()
+		self.account.save(<- minter, to: self.MinterStoragePath)
+		self.account.link<&NFTMinter>(self.MinterPublicPath, target: self.MinterStoragePath)
 
 		emit ContractInitialized()
 	}
