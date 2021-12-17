@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: UNLICENSED */
 
-import DimeCollectible from "./DimeCollectible.cdc"
-import FungibleToken from "./FungibleToken.cdc"
-import FUSD from "./FUSD.cdc"
-import NonFungibleToken from "./NonFungibleToken.cdc"
+import DimeCollectible from 0xf5cdaace879e5a79
+import FungibleToken from 0xf233dcee88fe0abe
+import FUSD from 0x3c5959b568896393
+import NonFungibleToken from 0x1d7e57aa55817448
 
 /*
     This contract allows:
