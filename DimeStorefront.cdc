@@ -47,6 +47,9 @@ pub contract DimeStorefront {
 		pub var price: UFix64
 
 		pub fun getHistory(): [[AnyStruct]]
+
+		pub var dimeRoyalties: UFix64
+		pub var creatorRoyalties: UFix64?
 	}
 
 	// A DimeCollectible NFT being offered to sale for a set fee
@@ -71,9 +74,10 @@ pub contract DimeStorefront {
 		access(self) let receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 
 		// The fraction of the price that goes to Dime
-		pub let dimeRoyalty: UFix64
-		// The fraction of the price that goes to the original creator
-		pub let creatorRoyalty: UFix64
+		pub var dimeRoyalties: UFix64
+		// The fraction of the price that goes to the original creator.
+		// If this is an initial sale, this is null
+		pub var creatorRoyalties: UFix64?
 
 		// The collection containing that ID.
 		access(self) let sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>
@@ -86,14 +90,9 @@ pub contract DimeStorefront {
 		// Take the information required to create a sale offer
 		init(sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
 			itemId: UInt64, creator: Address, content: String, price: UFix64, history: [[AnyStruct]],
-			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
-			pre {
-				sellerItemProvider.borrow() != nil: "Cannot borrow collection from seller"
-			}
-
+			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>, dimeRoyalties: UFix64,
+			creatorRoyalties: UFix64?) {
 			self.saleCompleted = false
-
-			let collectionRef = sellerItemProvider.borrow()!
 
 			self.sellerItemProvider = sellerItemProvider
 			self.itemId = itemId
@@ -102,10 +101,10 @@ pub contract DimeStorefront {
 			self.creator = creator
 			self.content = content
 			self.history = history
-
 			self.receiver = receiver
-			self.creatorRoyalty = 0.01
-			self.dimeRoyalty = 0.01
+
+			self.dimeRoyalties = dimeRoyalties
+			self.creatorRoyalties = creatorRoyalties
 
 			emit SaleOfferCreated(itemId: self.itemId, price: self.price)
 		}
@@ -113,18 +112,25 @@ pub contract DimeStorefront {
 		pub fun setPrice(newPrice: UFix64) {
 			self.price = newPrice
 		}
+
+		pub fun setRoyalties(newDime: UFix64, newCreator: UFix64?) {
+			self.dimeRoyalties = newDime
+			self.creatorRoyalties = newCreator
+		}
 	}
 
 	// An interface for adding and removing SaleOffers to a collection, intended for
 	// use by the collection's owner
 	pub resource interface StorefrontManager {
 		pub fun createSaleOffer(
-			sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			seller: Address,
 			itemId: UInt64,
 			creator: Address,
 			content: String,
 			price: UFix64,
 			history: [[AnyStruct]],
+
+			itemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
 			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 		)
 		pub fun removeSaleOffer(itemId: UInt64, beingPurchased: Bool)
@@ -157,27 +163,42 @@ pub contract DimeStorefront {
 
 		// Insert a SaleOffer into the collection, replacing one with the same itemId if present
 		pub fun createSaleOffer(
-			sellerItemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			seller: Address,
 			itemId: UInt64,
 			creator: Address,
 			content: String,
 			price: UFix64,
 			history: [[AnyStruct]],
+			itemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
 			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 		) {
-			let nft = sellerItemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
+			assert(itemProvider.borrow() != nil, message: "Couldn't get a capability to the creator's collection")
+
+			let nft = itemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
 			if (!nft.tradeable) {
-				panic("Tried to put an untradeable token on sale")
+				panic("Tried to put an untradeable item on sale")
+			}
+
+			// Values for an initial sale
+			var dimeRoyalties = 0.1
+			var creatorRoyalties: UFix64? = nil
+
+			// Values for a secondary sale
+			if (seller != creator) {
+				dimeRoyalties = 0.01
+				creatorRoyalties = nft.creatorRoyalties
 			}
 		
 			let newOffer <- create SaleOffer(
-				sellerItemProvider: sellerItemProvider,
+				sellerItemProvider: itemProvider,
 				itemId: itemId,
 				creator: creator,
 				content: content,
 				price: price,
 				history: history,
-				receiver: receiver
+				receiver: receiver,
+				dimeRoyalties: dimeRoyalties,
+				creatorRoyalties: creatorRoyalties
 			)
 
 			// Add the new offer to the dictionary, overwriting an old one if it exists
@@ -221,6 +242,12 @@ pub contract DimeStorefront {
 
 			let offer <- self.pop(itemId: itemId)!
 			offer.setPrice(newPrice: newPrice)
+			self.push(offer: <- offer)
+		}
+
+		pub fun setRoyalties(itemId: UInt64, newDime: UFix64, newCreator: UFix64?) {
+			let offer <- self.pop(itemId: itemId)!
+			offer.setRoyalties(newDime: newDime, newCreator: newCreator)
 			self.push(offer: <- offer)
 		}
 

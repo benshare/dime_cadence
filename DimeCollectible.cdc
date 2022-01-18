@@ -34,14 +34,21 @@ pub contract DimeCollectible: NonFungibleToken {
 		pub var tradeable: Bool
 		// A chronological list of the owners of the token
 		access(self) var history: [[AnyStruct]]
+		// The fraction of each secondary sale that goes to the original creator
+		pub var creatorRoyalties: UFix64
+		// When this item was created
+		pub var creationTime: UFix64
 
-		init(id: UInt64, creator: Address, content: String, hiddenContent: String?, tradeable: Bool, firstOwner: Address) {
+		init(id: UInt64, creator: Address, content: String, hiddenContent: String?,
+			tradeable: Bool, firstOwner: Address, creatorRoyalties: UFix64) {
 			self.id = id
 			self.creator = creator
 			self.content = content
 			self.hiddenContent = hiddenContent
 			self.tradeable = tradeable
 			self.history = [[firstOwner]]
+			self.creatorRoyalties = creatorRoyalties
+			self.creationTime = getCurrentBlock().timestamp
 		}
 
 		access(self) fun addSale(toUser: Address, atPrice: UFix64) {
@@ -51,6 +58,11 @@ pub contract DimeCollectible: NonFungibleToken {
 
 		pub fun getHistory(): [[AnyStruct]] {
 			return self.history
+		}
+
+		pub fun setRoyaltiesAndCreationTime() {
+			self.creatorRoyalties = 0.01
+			self.creationTime = getCurrentBlock().timestamp
 		}
 	}
 
@@ -74,7 +86,8 @@ pub contract DimeCollectible: NonFungibleToken {
 	// Collection
 	// A collection of NFTs owned by an account
 	//
-	pub resource Collection: DimeCollectionPublic, NonFungibleToken.Provider, NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic {
+	pub resource Collection: DimeCollectionPublic, NonFungibleToken.Provider,
+		NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic {
 		// Dictionary of NFT conforming tokens
 		// NFT is a resource type with an `UInt64` ID field
 		pub var ownedNFTs: @{UInt64: NonFungibleToken.NFT}
@@ -123,6 +136,13 @@ pub contract DimeCollectible: NonFungibleToken {
 			}
 		}
 
+		pub fun setRoyaltiesAndCreationTime() {
+			for id in self.ownedNFTs.keys {
+				let ref = self.borrowCollectible(id: id)
+				ref!.setRoyaltiesAndCreationTime()
+			}
+		}
+
 		destroy() {
 			destroy self.ownedNFTs
 		}
@@ -141,13 +161,18 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub resource NFTMinter {
 		// Mints an NFT with a new ID and deposits it in the recipient's
 		// collection using their collection reference
-		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64, creator: Address, content: String, hiddenContent: String?, tradeable: Bool) {
-			assert(!DimeCollectible.mintedTokens.contains(tokenId), message: "A token with that ID already exists")
+		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64,
+			creator: Address, content: String, hiddenContent: String?, tradeable: Bool,
+			creatorRoyalties: UFix64?) {
+			assert(!DimeCollectible.mintedTokens.contains(tokenId),
+				message: "A token with that ID already exists")
 			DimeCollectible.mintedTokens.append(tokenId)
 
 			// Deposit it in the collection using the reference
 			let firstOwner = collection.owner!.address
-			collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creator: creator, content: content, hiddenContent: hiddenContent, tradeable: tradeable, firstOwner: firstOwner))
+			collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creator: creator,
+				content: content, hiddenContent: hiddenContent, tradeable: tradeable,
+				firstOwner: firstOwner, creatorRoyalties: creatorRoyalties ?? 0.01))
 			DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
 
 			emit Minted(id: tokenId)
@@ -180,9 +205,9 @@ pub contract DimeCollectible: NonFungibleToken {
 
 		// Create a Minter resource and save it to storage.
 		// Create a public link so all users can use the same global one
-		let minter <- create NFTMinter()
-		self.account.save(<- minter, to: self.MinterStoragePath)
-		self.account.link<&NFTMinter>(self.MinterPublicPath, target: self.MinterStoragePath)
+		// let minter <- create NFTMinter()
+		// self.account.save(<- minter, to: self.MinterStoragePath)
+		// self.account.link<&NFTMinter>(self.MinterPublicPath, target: self.MinterStoragePath)
 
 		emit ContractInitialized()
 	}
