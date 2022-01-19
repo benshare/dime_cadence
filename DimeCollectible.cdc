@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: UNLICENSED */
 
+import FungibleToken from 0xf233dcee88fe0abe
+import FUSD from 0x3c5959b568896393
 import NonFungibleToken from 0x1d7e57aa55817448
 
 pub contract DimeCollectible: NonFungibleToken {
@@ -20,12 +22,32 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub var totalSupply: UInt64
 	access(self) var mintedTokens: [UInt64]
 
+	pub struct RoyaltiesRecipient {
+		pub let vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>
+		pub let allotment: UFix64
+
+		init(vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>, allotment: UFix64) {
+			self.vault = vault
+			self.allotment = allotment
+		}
+	}
+
+	pub struct Royalties {
+		pub let recipients: {Address: RoyaltiesRecipient}
+
+		init(recipients: {Address: RoyaltiesRecipient}) {
+			self.recipients = recipients
+		}
+	}
+
 	// DimeCollectible as a NFT
 	pub resource NFT: NonFungibleToken.INFT {
 		// The token's ID
 		pub let id: UInt64
-		// The token's original creator
 		pub let creator: Address
+		// The token's original creators. If there is only one creator, this is
+		// simply length 1
+		pub var creators: [Address]
 		// The url corresponding to the token's content
 		pub let content: String
 		// The url corresponding to the token's hidden content
@@ -34,19 +56,24 @@ pub contract DimeCollectible: NonFungibleToken {
 		pub var tradeable: Bool
 		// A chronological list of the owners of the token
 		access(self) var history: [[AnyStruct]]
-		// The fraction of each secondary sale that goes to the original creator
-		pub var creatorRoyalties: UFix64
+		// A list of owners/prices of the associated physical item before it was minted on Flow
+		access(self) var previousHistory: [[AnyStruct]]
+		// The fraction of each secondary sale taken as royalties for anyone listed
+		// in this dictionary
+		pub var creatorRoyalties: Royalties
 		// When this item was created
 		pub var creationTime: UFix64
 
-		init(id: UInt64, creator: Address, content: String, hiddenContent: String?,
-			tradeable: Bool, firstOwner: Address, creatorRoyalties: UFix64) {
+		init(id: UInt64, creators: [Address], content: String, hiddenContent: String?,
+			tradeable: Bool, firstOwner: Address, previousHistory: [[String]], creatorRoyalties: Royalties) {
 			self.id = id
-			self.creator = creator
+			self.creator = creators[0]
+			self.creators = creators
 			self.content = content
 			self.hiddenContent = hiddenContent
 			self.tradeable = tradeable
 			self.history = [[firstOwner]]
+			self.previousHistory = previousHistory
 			self.creatorRoyalties = creatorRoyalties
 			self.creationTime = getCurrentBlock().timestamp
 		}
@@ -60,9 +87,21 @@ pub contract DimeCollectible: NonFungibleToken {
 			return self.history
 		}
 
-		pub fun setRoyaltiesAndCreationTime() {
-			self.creatorRoyalties = 0.01
-			self.creationTime = getCurrentBlock().timestamp
+		pub fun getPreviousHistory(): [[AnyStruct]] {
+			return self.previousHistory
+		}
+
+		pub fun hasHiddenContent(): Bool {
+			return self.hiddenContent != nil
+		}
+
+		pub fun setDefaults(vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
+			// self.creators = [self.creator]
+			// let recipients: {Address: RoyaltiesRecipient} = {}
+			// recipients[self.creator] = RoyaltiesRecipient(vault: vault, allotment: 0.01)
+			// self.creatorRoyalties = Royalties(recipients: recipients)
+			// self.creationTime = getCurrentBlock().timestamp
+			self.previousHistory = []
 		}
 	}
 
@@ -136,10 +175,10 @@ pub contract DimeCollectible: NonFungibleToken {
 			}
 		}
 
-		pub fun setRoyaltiesAndCreationTime() {
+		pub fun setDefaults(vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>) {
 			for id in self.ownedNFTs.keys {
 				let ref = self.borrowCollectible(id: id)
-				ref!.setRoyaltiesAndCreationTime()
+				ref!.setDefaults(vault: vault)
 			}
 		}
 
@@ -162,17 +201,27 @@ pub contract DimeCollectible: NonFungibleToken {
 		// Mints an NFT with a new ID and deposits it in the recipient's
 		// collection using their collection reference
 		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64,
-			creator: Address, content: String, hiddenContent: String?, tradeable: Bool,
-			creatorRoyalties: UFix64?) {
+			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
+			previousHistory: [[String]]?, creatorRoyalties: Royalties) {
 			assert(!DimeCollectible.mintedTokens.contains(tokenId),
 				message: "A token with that ID already exists")
+
+			var totalAllotment = 0.0
+			for recipient in creatorRoyalties.recipients.values {
+				let allotment = recipient.allotment
+				assert(allotment > 0.0, message: "Listed royalties must be > 0")
+				totalAllotment = totalAllotment + allotment
+			}
+			assert(totalAllotment <= 0.5, message: "Total royalties must be <= 50%")
+
 			DimeCollectible.mintedTokens.append(tokenId)
 
 			// Deposit it in the collection using the reference
 			let firstOwner = collection.owner!.address
-			collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creator: creator,
+			collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creators: creators,
 				content: content, hiddenContent: hiddenContent, tradeable: tradeable,
-				firstOwner: firstOwner, creatorRoyalties: creatorRoyalties ?? 0.01))
+				firstOwner: firstOwner, previousHistory: previousHistory ?? [],
+				creatorRoyalties: creatorRoyalties))
 			DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
 
 			emit Minted(id: tokenId)
@@ -212,3 +261,4 @@ pub contract DimeCollectible: NonFungibleToken {
 		emit ContractInitialized()
 	}
 }
+ 
