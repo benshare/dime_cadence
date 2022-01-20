@@ -65,7 +65,7 @@ pub contract DimeCollectible: NonFungibleToken {
 		pub var creationTime: UFix64
 
 		init(id: UInt64, creators: [Address], content: String, hiddenContent: String?,
-			tradeable: Bool, firstOwner: Address, previousHistory: [[String]], creatorRoyalties: Royalties) {
+			tradeable: Bool, firstOwner: Address, previousHistory: [[AnyStruct]], creatorRoyalties: Royalties) {
 			self.id = id
 			self.creator = creators[0]
 			self.creators = creators
@@ -202,7 +202,7 @@ pub contract DimeCollectible: NonFungibleToken {
 		// collection using their collection reference
 		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
-			previousHistory: [[String]]?, creatorRoyalties: Royalties) {
+			previousHistory: [[AnyStruct]]?, creatorRoyalties: Royalties) {
 			assert(!DimeCollectible.mintedTokens.contains(tokenId),
 				message: "A token with that ID already exists")
 
@@ -261,4 +261,3 @@ pub contract DimeCollectible: NonFungibleToken {
 		emit ContractInitialized()
 	}
 }
- 
