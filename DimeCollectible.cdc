@@ -47,7 +47,7 @@ pub contract DimeCollectible: NonFungibleToken {
 		pub let creator: Address
 		// The token's original creators. If there is only one creator, this is
 		// simply length 1
-		pub var creators: [Address]
+		access(self) var creators: [Address]
 		// The url corresponding to the token's content
 		pub let content: String
 		// The url corresponding to the token's hidden content
@@ -60,7 +60,7 @@ pub contract DimeCollectible: NonFungibleToken {
 		access(self) var previousHistory: [[AnyStruct]]
 		// The fraction of each secondary sale taken as royalties for anyone listed
 		// in this dictionary
-		pub var creatorRoyalties: Royalties
+		access(self) var creatorRoyalties: Royalties
 		// When this item was created
 		pub var creationTime: UFix64
 
@@ -200,12 +200,9 @@ pub contract DimeCollectible: NonFungibleToken {
 	pub resource NFTMinter {
 		// Mints an NFT with a new ID and deposits it in the recipient's
 		// collection using their collection reference
-		pub fun mintNFT(collection: &{NonFungibleToken.CollectionPublic}, tokenId: UInt64,
+		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
 			previousHistory: [[AnyStruct]]?, creatorRoyalties: Royalties) {
-			assert(!DimeCollectible.mintedTokens.contains(tokenId),
-				message: "A token with that ID already exists")
-
 			var totalAllotment = 0.0
 			for recipient in creatorRoyalties.recipients.values {
 				let allotment = recipient.allotment
@@ -214,17 +211,22 @@ pub contract DimeCollectible: NonFungibleToken {
 			}
 			assert(totalAllotment <= 0.5, message: "Total royalties must be <= 50%")
 
-			DimeCollectible.mintedTokens.append(tokenId)
+			for tokenId in tokenIds {
+				assert(!DimeCollectible.mintedTokens.contains(tokenId),
+					message: "A token with that ID already exists")
 
-			// Deposit it in the collection using the reference
-			let firstOwner = collection.owner!.address
-			collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creators: creators,
-				content: content, hiddenContent: hiddenContent, tradeable: tradeable,
-				firstOwner: firstOwner, previousHistory: previousHistory ?? [],
-				creatorRoyalties: creatorRoyalties))
-			DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
+				DimeCollectible.mintedTokens.append(tokenId)
 
-			emit Minted(id: tokenId)
+				// Deposit it in the collection using the reference
+				let firstOwner = collection.owner!.address
+				collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creators: creators,
+					content: content, hiddenContent: hiddenContent, tradeable: tradeable,
+					firstOwner: firstOwner, previousHistory: previousHistory ?? [],
+					creatorRoyalties: creatorRoyalties))
+				DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
+
+				emit Minted(id: tokenId)
+			}
 		}
 	}
 
@@ -261,3 +263,4 @@ pub contract DimeCollectible: NonFungibleToken {
 		emit ContractInitialized()
 	}
 }
+ 
