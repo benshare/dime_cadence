@@ -18,7 +18,7 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 	pub let MinterStoragePath: StoragePath
 	pub let MinterPublicPath: PublicPath
 
-	// The total number of DimeCollectibles that have been minted
+	// The total number of DimeCollectibleV2s that have been minted
 	pub var totalSupply: UInt64
 	access(self) var mintedTokens: [UInt64]
 
@@ -40,7 +40,7 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 		}
 	}
 
-	// DimeCollectible as a NFT
+	// DimeCollectibleV2 as a NFT
 	pub resource NFT: NonFungibleToken.INFT {
 		// The token's ID
 		pub let id: UInt64
@@ -111,7 +111,7 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 	pub resource interface DimeCollectionPublic {
 		pub fun deposit(token: @NonFungibleToken.NFT)
 		pub fun getIDs(): [UInt64]
-		pub fun borrowCollectible(id: UInt64): &DimeCollectible.NFT? {
+		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV2.NFT? {
 			// If the result isn't nil, the id of the returned reference
 			// should be the same as the argument to the function
 			post {
@@ -142,7 +142,7 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 
 		// Takes a NFT and adds it to the collection dictionary
 		pub fun deposit(token: @NonFungibleToken.NFT) {
-			let token <- token as! @DimeCollectible.NFT
+			let token <- token as! @DimeCollectibleV2.NFT
 
 			let id: UInt64 = token.id
 
@@ -165,11 +165,11 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 			return &self.ownedNFTs[id] as &NonFungibleToken.NFT
 		}
 
-		// Gets a reference to an NFT in the collection as a DimeCollectible.
-		pub fun borrowCollectible(id: UInt64): &DimeCollectible.NFT? {
+		// Gets a reference to an NFT in the collection as a DimeCollectibleV2.
+		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV2.NFT? {
 			if self.ownedNFTs[id] != nil {
 				let ref = &self.ownedNFTs[id] as auth &NonFungibleToken.NFT
-				return ref as! &DimeCollectible.NFT
+				return ref as! &DimeCollectibleV2.NFT
 			} else {
 				return nil
 			}
@@ -192,7 +192,7 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 }
 
 	// Public function that anyone can call to create a new empty collection
-	pub fun createEmptyCollection(): @DimeCollectible.Collection {
+	pub fun createEmptyCollection(): @DimeCollectibleV2.Collection {
 		return <- create Collection()
 	}
 
@@ -212,18 +212,18 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 			assert(totalAllotment <= 0.5, message: "Total royalties must be <= 50%")
 
 			for tokenId in tokenIds {
-				assert(!DimeCollectible.mintedTokens.contains(tokenId),
+				assert(!DimeCollectibleV2.mintedTokens.contains(tokenId),
 					message: "A token with that ID already exists")
 
-				DimeCollectible.mintedTokens.append(tokenId)
+				DimeCollectibleV2.mintedTokens.append(tokenId)
 
 				// Deposit it in the collection using the reference
 				let firstOwner = collection.owner!.address
-				collection.deposit(token: <- create DimeCollectible.NFT(id: tokenId, creators: creators,
+				collection.deposit(token: <- create DimeCollectibleV2.NFT(id: tokenId, creators: creators,
 					content: content, hiddenContent: hiddenContent, tradeable: tradeable,
 					firstOwner: firstOwner, previousHistory: previousHistory ?? [],
 					creatorRoyalties: creatorRoyalties))
-				DimeCollectible.totalSupply = DimeCollectible.totalSupply + (1 as UInt64)
+				DimeCollectibleV2.totalSupply = DimeCollectibleV2.totalSupply + (1 as UInt64)
 
 				emit Minted(id: tokenId)
 			}
@@ -231,14 +231,14 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 	}
 
 	// Get a reference to an item in an account's Collection, if available.
-	// If an account does not have a DimeCollectible.Collection, panic.
+	// If an account does not have a DimeCollectibleV2.Collection, panic.
 	// If it has a collection but does not contain the itemId, return nil.
 	// If it has a collection and that collection contains the itemId,
 	// return a reference to it
-	pub fun fetch(_ from: Address, itemId: UInt64): &DimeCollectible.NFT? {
+	pub fun fetch(_ from: Address, itemId: UInt64): &DimeCollectibleV2.NFT? {
   		let collection = getAccount(from)
-	  		.getCapability(DimeCollectible.CollectionPublicPath)!
-	  		.borrow<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic}>()
+	  		.getCapability(DimeCollectibleV2.CollectionPublicPath)!
+	  		.borrow<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic}>()
 	  		?? panic("Couldn't get collection")
 		return collection.borrowCollectible(id: itemId)
   	}
@@ -263,4 +263,3 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 		emit ContractInitialized()
 	}
 }
- 
