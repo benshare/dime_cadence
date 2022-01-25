@@ -187,7 +187,7 @@ pub contract DimeStorefrontV2 {
 			// Values for a secondary sale
 			if (!nft.creators.contains(seller)) {
 				dimeRoyalties = 0.01
-				creatorRoyalties = nft.creatorRoyalties
+				creatorRoyalties = nft.getRoyalties()
 			}
 		
 			let newOffer <- create SaleOffer(
@@ -196,7 +196,7 @@ pub contract DimeStorefrontV2 {
 				price: price,
 				receiver: receiver,
 				dimeRoyalties: dimeRoyalties,
-				creatorRoyalties: nft.creatorRoyalties
+				creatorRoyalties: nft.getRoyalties()
 			)
 
 			// Add the new offer to the dictionary, overwriting an old one if it exists
@@ -250,7 +250,7 @@ pub contract DimeStorefrontV2 {
 				let nft = itemProvider.borrow()!.borrowCollectible(id: id) ?? panic("Couldn't borrow nft from seller")
 				let recipients: {Address: DimeCollectibleV2.RoyaltiesRecipient} = {}
 				let empty = DimeCollectibleV2.Royalties(recipients: recipients)
-				offer.setDefaults(hasHiddenContent: nft.hasHiddenContent(), creatorRoyalties: nft.creator == owner ? empty : nft.creatorRoyalties)
+				offer.setDefaults(hasHiddenContent: nft.hasHiddenContent(), creatorRoyalties: nft.creator == owner ? empty : nft.getRoyalties())
 				self.push(offer: <- offer)
 			}
 		}
