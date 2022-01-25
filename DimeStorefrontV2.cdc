@@ -51,7 +51,7 @@ pub contract DimeStorefrontV2 {
 
 		pub var price: UFix64
 		pub var dimeRoyalties: UFix64
-		access(self) var creatorRoyalties: DimeCollectibleV2.Royalties
+		pub fun getRoyalties(): DimeCollectibleV2.Royalties
 	}
 
 	// A DimeCollectibleV2 NFT being offered to sale for a set fee
@@ -79,9 +79,10 @@ pub contract DimeStorefrontV2 {
 		pub var price: UFix64
 		// The fraction of the sale that goes to Dime
 		pub var dimeRoyalties: UFix64
-		// The fraction of the sale that goes to the original creators.
-		// If this is an initial sale, this will be empty
-		access(self) var creatorRoyalties: DimeCollectibleV2.Royalties
+
+		pub fun getRoyalties(): DimeCollectibleV2.Royalties {
+			return self.creatorRoyalties
+		}
 
 		pub fun getHistory(): [[AnyStruct]] {
 			return self.history
