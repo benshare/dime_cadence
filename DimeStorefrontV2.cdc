@@ -13,7 +13,7 @@ import NonFungibleToken from 0x1d7e57aa55817448
 	- The Dime admin account to accept offers without transferring tokens
  */
 
-pub contract DimeStorefront {
+pub contract DimeStorefrontV2 {
 
 	// SaleOffer events
 	// A sale offer has been created.
