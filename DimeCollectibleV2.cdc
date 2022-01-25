@@ -4,7 +4,7 @@ import FungibleToken from 0xf233dcee88fe0abe
 import FUSD from 0x3c5959b568896393
 import NonFungibleToken from 0x1d7e57aa55817448
 
-pub contract DimeCollectible: NonFungibleToken {
+pub contract DimeCollectibleV2: NonFungibleToken {
 
 	// Events
 	pub event ContractInitialized()
