@@ -51,16 +51,16 @@ pub contract DimeStorefrontV2 {
 
 		pub var price: UFix64
 		pub var dimeRoyalties: UFix64
-		access(self) var creatorRoyalties: DimeCollectible.Royalties
+		access(self) var creatorRoyalties: DimeCollectibleV2.Royalties
 	}
 
-	// A DimeCollectible NFT being offered to sale for a set fee
+	// A DimeCollectibleV2 NFT being offered to sale for a set fee
 	pub resource SaleOffer: SaleOfferPublic {
 		// Whether the sale has completed with someone purchasing the item.
 		pub var saleCompleted: Bool
 
 		// The collection containing the NFT.
-		access(self) let sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>
+		access(self) let sellerItemProvider: Capability<&DimeCollectibleV2.Collection{NonFungibleToken.Provider}>
 
 		// The vault that will be paid when the item is purchased.
 		// This isn't used right now since FUSD payments are not enabled,
@@ -81,7 +81,7 @@ pub contract DimeStorefrontV2 {
 		pub var dimeRoyalties: UFix64
 		// The fraction of the sale that goes to the original creators.
 		// If this is an initial sale, this will be empty
-		access(self) var creatorRoyalties: DimeCollectible.Royalties
+		access(self) var creatorRoyalties: DimeCollectibleV2.Royalties
 
 		pub fun getHistory(): [[AnyStruct]] {
 			return self.history
@@ -93,9 +93,9 @@ pub contract DimeStorefrontV2 {
 		}
 
 		// Take the information required to create a sale offer
-		init(nft: &DimeCollectible.NFT, sellerItemProvider: Capability<&DimeCollectible.Collection{NonFungibleToken.Provider}>,
+		init(nft: &DimeCollectibleV2.NFT, sellerItemProvider: Capability<&DimeCollectibleV2.Collection{NonFungibleToken.Provider}>,
 			price: UFix64, receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>, dimeRoyalties: UFix64,
-			creatorRoyalties: DimeCollectible.Royalties) {
+			creatorRoyalties: DimeCollectibleV2.Royalties) {
 			self.saleCompleted = false
 			self.sellerItemProvider = sellerItemProvider
 			self.receiver = receiver
@@ -119,7 +119,7 @@ pub contract DimeStorefrontV2 {
 			self.price = newPrice
 		}
 
-		pub fun setDefaults(hasHiddenContent: Bool, creatorRoyalties: DimeCollectible.Royalties) {
+		pub fun setDefaults(hasHiddenContent: Bool, creatorRoyalties: DimeCollectibleV2.Royalties) {
 			self.creators = [self.creator]
 			self.hasHiddenContent = hasHiddenContent
 			self.creatorRoyalties = creatorRoyalties
@@ -131,7 +131,7 @@ pub contract DimeStorefrontV2 {
 	pub resource interface StorefrontManager {
 		pub fun createSaleOffer(
 			seller: Address,
-			itemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			itemProvider: Capability<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic, NonFungibleToken.Provider}>,
 			itemId: UInt64,
 			price: UFix64,
 			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
@@ -167,7 +167,7 @@ pub contract DimeStorefrontV2 {
 		// Insert a SaleOffer into the collection, replacing one with the same itemId if present
 		pub fun createSaleOffer(
 			seller: Address,
-			itemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			itemProvider: Capability<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic, NonFungibleToken.Provider}>,
 			itemId: UInt64,
 			price: UFix64,
 			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
@@ -181,7 +181,7 @@ pub contract DimeStorefrontV2 {
 
 			// Values for an initial sale
 			var dimeRoyalties = 0.1
-			var creatorRoyalties = DimeCollectible.Royalties(recipients: {})
+			var creatorRoyalties = DimeCollectibleV2.Royalties(recipients: {})
 
 			// Values for a secondary sale
 			if (!nft.creators.contains(seller)) {
@@ -243,12 +243,12 @@ pub contract DimeStorefrontV2 {
 		}
 
 		pub fun setDefaults(owner: Address, 
-			itemProvider: Capability<&DimeCollectible.Collection{DimeCollectible.DimeCollectionPublic, NonFungibleToken.Provider}>) {
+			itemProvider: Capability<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic, NonFungibleToken.Provider}>) {
 			for id in self.getSaleOfferIds() {
 				let offer <- self.pop(itemId: id)!
 				let nft = itemProvider.borrow()!.borrowCollectible(id: id) ?? panic("Couldn't borrow nft from seller")
-				let recipients: {Address: DimeCollectible.RoyaltiesRecipient} = {}
-				let empty = DimeCollectible.Royalties(recipients: recipients)
+				let recipients: {Address: DimeCollectibleV2.RoyaltiesRecipient} = {}
+				let empty = DimeCollectibleV2.Royalties(recipients: recipients)
 				offer.setDefaults(hasHiddenContent: nft.hasHiddenContent(), creatorRoyalties: nft.creator == owner ? empty : nft.creatorRoyalties)
 				self.push(offer: <- offer)
 			}
@@ -269,7 +269,7 @@ pub contract DimeStorefrontV2 {
 	}
 
 	init () {
-		self.StorefrontStoragePath = /storage/DimeStorefrontCollection
-		self.StorefrontPublicPath = /public/DimeStorefrontCollection
+		self.StorefrontStoragePath = /storage/DimeStorefrontV2Collection
+		self.StorefrontPublicPath = /public/DimeStorefrontV2Collection
 	}
 }
