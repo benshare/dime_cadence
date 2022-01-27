@@ -79,6 +79,7 @@ pub contract DimeStorefrontV2 {
 		pub var price: UFix64
 		// The fraction of the sale that goes to Dime
 		pub var dimeRoyalties: UFix64
+		access(self) var creatorRoyalties: DimeCollectibleV2.Royalties
 
 		pub fun getRoyalties(): DimeCollectibleV2.Royalties {
 			return self.creatorRoyalties
@@ -102,8 +103,8 @@ pub contract DimeStorefrontV2 {
 			self.receiver = receiver
 
 			self.itemId = nft.id
-			self.creator = nft.creators[0]
-			self.creators = nft.creators
+			self.creator = nft.getCreators()[0]
+			self.creators = nft.getCreators()
 
 			self.content = nft.content
 			self.hasHiddenContent = nft.hasHiddenContent()
@@ -185,7 +186,7 @@ pub contract DimeStorefrontV2 {
 			var creatorRoyalties = DimeCollectibleV2.Royalties(recipients: {})
 
 			// Values for a secondary sale
-			if (!nft.creators.contains(seller)) {
+			if (!nft.getCreators().contains(seller)) {
 				dimeRoyalties = 0.01
 				creatorRoyalties = nft.getRoyalties()
 			}
@@ -205,7 +206,7 @@ pub contract DimeStorefrontV2 {
 
 			emit SaleOfferAdded(
 			  itemId: itemId,
-			  creators: nft.creators,
+			  creators: nft.getCreators(),
 			  content: nft.content,
 			  owner: self.owner?.address!,
 			  price: price
