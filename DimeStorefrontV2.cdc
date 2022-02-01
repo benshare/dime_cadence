@@ -125,11 +125,10 @@ pub contract DimeStorefrontV2 {
 	// An interface for adding and removing SaleOffers to a collection, intended for
 	// use by the collection's owner
 	pub resource interface StorefrontManager {
-		pub fun createSaleOffer(
+		pub fun createSaleOffers(
 			seller: Address,
 			itemProvider: Capability<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic, NonFungibleToken.Provider}>,
-			itemId: UInt64,
-			price: UFix64,
+			itemsAndPrices: {UInt64: UFix64},
 			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 		)
 		pub fun removeSaleOffer(itemId: UInt64, beingPurchased: Bool)
@@ -161,50 +160,51 @@ pub contract DimeStorefrontV2 {
 		}
 
 		// Insert a SaleOffer into the collection, replacing one with the same itemId if present
-		pub fun createSaleOffer(
+		pub fun createSaleOffers(
 			seller: Address,
 			itemProvider: Capability<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic, NonFungibleToken.Provider}>,
-			itemId: UInt64,
-			price: UFix64,
+			itemsAndPrices: {UInt64: UFix64},
 			receiver: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 		) {
 			assert(itemProvider.borrow() != nil, message: "Couldn't get a capability to the creator's collection")
 
-			let nft = itemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
-			if (!nft.tradeable) {
-				panic("Tried to put an untradeable item on sale")
+			for itemId in itemsAndPrices.keys {
+				let nft = itemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
+				if (!nft.tradeable) {
+					panic("Tried to put an untradeable item on sale")
+				}
+
+				// Values for an initial sale
+				var dimeRoyalties = 0.1
+				var creatorRoyalties = DimeCollectibleV2.Royalties(recipients: {})
+
+				// Values for a secondary sale
+				if (!nft.getCreators().contains(seller)) {
+					dimeRoyalties = 0.01
+					creatorRoyalties = nft.getRoyalties()
+				}
+			
+				let newOffer <- create SaleOffer(
+					nft: nft,
+					sellerItemProvider: itemProvider,
+					price: itemsAndPrices[itemId]!,
+					receiver: receiver,
+					dimeRoyalties: dimeRoyalties,
+					creatorRoyalties: nft.getRoyalties()
+				)
+
+				// Add the new offer to the dictionary, overwriting an old one if it exists
+				let oldOffer <- self.saleOffers[itemId] <- newOffer
+				destroy oldOffer
+
+				emit SaleOfferAdded(
+					itemId: itemId,
+					creators: nft.getCreators(),
+					content: nft.content,
+					owner: self.owner?.address!,
+					price: itemsAndPrices[itemId]!
+				)
 			}
-
-			// Values for an initial sale
-			var dimeRoyalties = 0.1
-			var creatorRoyalties = DimeCollectibleV2.Royalties(recipients: {})
-
-			// Values for a secondary sale
-			if (!nft.getCreators().contains(seller)) {
-				dimeRoyalties = 0.01
-				creatorRoyalties = nft.getRoyalties()
-			}
-		
-			let newOffer <- create SaleOffer(
-				nft: nft,
-				sellerItemProvider: itemProvider,
-				price: price,
-				receiver: receiver,
-				dimeRoyalties: dimeRoyalties,
-				creatorRoyalties: nft.getRoyalties()
-			)
-
-			// Add the new offer to the dictionary, overwriting an old one if it exists
-			let oldOffer <- self.saleOffers[itemId] <- newOffer
-			destroy oldOffer
-
-			emit SaleOfferAdded(
-			  itemId: itemId,
-			  creators: nft.getCreators(),
-			  content: nft.content,
-			  owner: self.owner?.address!,
-			  price: price
-			)
 		}
 
 		// Remove and return a SaleOffer from the collection
