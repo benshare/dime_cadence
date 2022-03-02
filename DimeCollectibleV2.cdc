@@ -22,85 +22,97 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 	pub var totalSupply: UInt64
 	access(self) var mintedTokens: [UInt64]
 
-	pub struct RoyaltiesRecipient {
+	pub enum NFTType: UInt8 {
+		pub case standard
+		pub case royalty
+		pub case release
+	}
+
+	pub struct Recipient {
 		pub let vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>
 		pub let allotment: UFix64
 
 		init(vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>, allotment: UFix64) {
+			assert(allotment > 0.0, message: "Each recipient must receive an allotment > 0")
 			self.vault = vault
 			self.allotment = allotment
 		}
 	}
 
 	pub struct Royalties {
-		pub let recipients: {Address: RoyaltiesRecipient}
+		access(self) let recipients: {Address: Recipient}
 
-		init(recipients: {Address: RoyaltiesRecipient}) {
+		init(recipients: {Address: Recipient}) {
+			var total = 0.0
+			for recipient in recipients.values {
+				total = total + recipient.allotment
+			}
+			assert(total <= 0.5, message: "Total royalties cannot be more than 50%")
 			self.recipients = recipients
+		}
+
+		pub fun getRecipients(): {Address: Recipient} {
+			return self.recipients
 		}
 	}
 
-	// DimeCollectibleV2 as a NFT
+	// DimeCollectible NFT, representing three distinct NFTTypes
 	pub resource NFT: NonFungibleToken.INFT {
-		// The token's ID
 		pub let id: UInt64
-		pub let creator: Address
-		// The token's original creators. If there is only one creator, this is
-		// simply length 1
-		access(self) let creators: [Address]
-		// The url corresponding to the token's content
-		pub let content: String
-		// The url corresponding to the token's hidden content
-		pub let hiddenContent: String?
-		// Is the token tradeable, or is it locked to its current owner?
-		pub let tradeable: Bool
-		// A chronological list of the owners of the token
-		access(self) var history: [[AnyStruct]]
-		// A list of owners/prices of the associated physical item before it was minted on Flow
-		access(self) let previousHistory: [[AnyStruct]]
-		// The fraction of each secondary sale taken as royalties for anyone listed
-		// in this dictionary
-		access(self) let creatorRoyalties: Royalties
-		// When this item was created
-		pub var creationTime: UFix64
+		pub let type: NFTType
 
-		init(id: UInt64, creators: [Address], content: String, hiddenContent: String?,
-			tradeable: Bool, firstOwner: Address, previousHistory: [[AnyStruct]], creatorRoyalties: Royalties) {
+		access(self) let creators: [Address]
+		pub fun getCreators(): [Address] {
+			return self.creators
+		}
+
+		pub let content: String
+		access(self) let hiddenContent: String?
+		pub fun hasHiddenContent(): Bool {
+			return self.hiddenContent != nil
+		}
+
+		access(self) var history: [[AnyStruct]]
+		pub fun getHistory(): [[AnyStruct]] {
+			return self.history
+		}
+		access(self) let previousHistory: [[AnyStruct]]?
+		pub fun getPreviousHistory(): [[AnyStruct]]? {
+			return self.previousHistory
+		}
+
+		access(self) let royalties: Royalties?
+		pub fun getRoyalties(): Royalties? {
+			return self.royalties
+		}
+
+		pub let tradeable: Bool
+		pub let creationTime: UFix64
+
+
+		init(id: UInt64, type: NFTType, creators: [Address], content: String,
+			hiddenContent: String?, tradeable: Bool, firstOwner: Address,
+			previousHistory: [[AnyStruct]]?, royalties: Royalties?) {
+			if (type == NFTType.standard || type == NFTType.release) {
+				assert(royalties != nil,
+					message: "Royalties must be provided for standard and release NFTs")
+			}
+
 			self.id = id
-			self.creator = creators[0]
+			self.type = type
 			self.creators = creators
 			self.content = content
 			self.hiddenContent = hiddenContent
-			self.tradeable = tradeable
 			self.history = [[firstOwner]]
 			self.previousHistory = previousHistory
-			self.creatorRoyalties = creatorRoyalties
+			self.royalties = royalties
+			self.tradeable = tradeable
 			self.creationTime = getCurrentBlock().timestamp
 		}
 
 		access(self) fun addSale(toUser: Address, atPrice: UFix64) {
 			let newEntry: [AnyStruct] = [toUser, atPrice]
 			self.history.append(newEntry)
-		}
-
-		pub fun getCreators(): [Address] {
-			return self.creators
-		}
-
-		pub fun getHistory(): [[AnyStruct]] {
-			return self.history
-		}
-
-		pub fun getPreviousHistory(): [[AnyStruct]] {
-			return self.previousHistory
-		}
-
-		pub fun getRoyalties(): Royalties {
-			return self.creatorRoyalties
-		}
-
-		pub fun hasHiddenContent(): Bool {
-			return self.hiddenContent != nil
 		}
 	}
 
@@ -158,8 +170,8 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 			return self.ownedNFTs.keys
 		}
 
-		// Gets a reference to an NFT in the collection
-		// so that the caller can read its metadata and call its methods
+		// We don't use this function (we use our own version, borrowCollectible),
+		// but it's required by the NonFungibleToken.CollcetionPublic interface
 		pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT {
 			return &self.ownedNFTs[id] as &NonFungibleToken.NFT
 		}
@@ -188,52 +200,73 @@ pub contract DimeCollectibleV2: NonFungibleToken {
 		return <- create Collection()
 	}
 
-	// Resource to mint new NFTs
 	pub resource NFTMinter {
-		// Mints an NFT with a new ID and deposits it in the recipient's
-		// collection using their collection reference
+		// Mint a standard DimeCollectible NFT
 		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
-			previousHistory: [[AnyStruct]]?, creatorRoyalties: Royalties) {
-			var totalAllotment = 0.0
-			for recipient in creatorRoyalties.recipients.values {
-				let allotment = recipient.allotment
-				assert(allotment > 0.0, message: "Listed royalties must be > 0")
-				totalAllotment = totalAllotment + allotment
-			}
-			assert(totalAllotment <= 0.5, message: "Total royalties must be <= 50%")
-
+			previousHistory: [[AnyStruct]]?, royalties: Royalties) {
 			for tokenId in tokenIds {
 				assert(!DimeCollectibleV2.mintedTokens.contains(tokenId),
 					message: "A token with id ".concat(tokenId.toString()).concat(" already exists"))
 
+				collection.deposit(
+					token: <- create DimeCollectibleV2.NFT (
+						id: tokenId, type: NFTType.standard, creators: creators,
+						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
+						firstOwner: collection.owner!.address, previousHistory: previousHistory ?? [],
+						royalties: royalties
+					)
+				)
 				DimeCollectibleV2.mintedTokens.append(tokenId)
+				DimeCollectibleV2.totalSupply = DimeCollectibleV2.totalSupply + (1 as UInt64)
 
-				// Deposit it in the collection using the reference
-				let firstOwner = collection.owner!.address
-				collection.deposit(token: <- create DimeCollectibleV2.NFT(id: tokenId, creators: creators,
-					content: content, hiddenContent: hiddenContent, tradeable: tradeable,
-					firstOwner: firstOwner, previousHistory: previousHistory ?? [],
-					creatorRoyalties: creatorRoyalties))
+				emit Minted(id: tokenId)
+			}
+		}
+
+		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
+			creators: [Address], content: String, tradeable: Bool) {
+			for tokenId in tokenIds {
+				assert(!DimeCollectibleV2.mintedTokens.contains(tokenId),
+					message: "A token with id ".concat(tokenId.toString()).concat(" already exists"))
+
+				collection.deposit(
+					token: <- create DimeCollectibleV2.NFT (
+						id: tokenId, type: NFTType.royalty, creators: creators,
+						content: content, hiddenContent: nil, tradeable: tradeable,
+						firstOwner: collection.owner!.address, previousHistory: nil,
+						royalties: nil
+					)
+				)
+				DimeCollectibleV2.mintedTokens.append(tokenId)
+				DimeCollectibleV2.totalSupply = DimeCollectibleV2.totalSupply + (1 as UInt64)
+
+				emit Minted(id: tokenId)
+			}
+		}
+
+		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
+			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
+			previousHistory: [[AnyStruct]]?, royalties: Royalties) {
+			for tokenId in tokenIds {
+				assert(!DimeCollectibleV2.mintedTokens.contains(tokenId),
+					message: "A token with id ".concat(tokenId.toString()).concat(" already exists"))
+
+				collection.deposit(
+					token: <- create DimeCollectibleV2.NFT (
+						id: tokenId, type: NFTType.standard, creators: creators,
+						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
+						firstOwner: collection.owner!.address, previousHistory: previousHistory ?? [],
+						royalties: royalties
+					)
+				)
+				DimeCollectibleV2.mintedTokens.append(tokenId)
 				DimeCollectibleV2.totalSupply = DimeCollectibleV2.totalSupply + (1 as UInt64)
 
 				emit Minted(id: tokenId)
 			}
 		}
 	}
-
-	// Get a reference to an item in an account's Collection, if available.
-	// If an account does not have a DimeCollectibleV2.Collection, panic.
-	// If it has a collection but does not contain the itemId, return nil.
-	// If it has a collection and that collection contains the itemId,
-	// return a reference to it
-	pub fun fetch(_ from: Address, itemId: UInt64): &DimeCollectibleV2.NFT? {
-  		let collection = getAccount(from)
-	  		.getCapability(DimeCollectibleV2.CollectionPublicPath)!
-	  		.borrow<&DimeCollectibleV2.Collection{DimeCollectibleV2.DimeCollectionPublic}>()
-	  		?? panic("Couldn't get collection")
-		return collection.borrowCollectible(id: itemId)
-  	}
 
 	init() {
 		// Set our named paths
