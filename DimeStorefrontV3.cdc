@@ -6,7 +6,7 @@ import FungibleToken from 0xf233dcee88fe0abe
 import FUSD from 0x3c5959b568896393
 import NonFungibleToken from 0x1d7e57aa55817448
 
-pub contract DimeStorefrontV2 {
+pub contract DimeStorefrontV3 {
 
 	// SaleOffer events
 	// A sale offer has been created.
@@ -318,7 +318,7 @@ pub contract DimeStorefrontV2 {
 	}
 
 	init () {
-		self.StorefrontStoragePath = /storage/DimeStorefrontV2
-		self.StorefrontPublicPath = /public/DimeStorefrontV2
+		self.StorefrontStoragePath = /storage/DimeStorefrontV3
+		self.StorefrontPublicPath = /public/DimeStorefrontV3
 	}
 }
