@@ -18,9 +18,9 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 	pub let MinterStoragePath: StoragePath
 	pub let MinterPublicPath: PublicPath
 
-	// The total number of DimeCollectibleV3s that have been minted
+	// The total number of NFTs minted using this contract. Doubles as the most recent
+	// id to be created.
 	pub var totalSupply: UInt64
-	access(self) var mintedTokens: [UInt64]
 
 	pub enum NFTType: UInt8 {
 		pub case standard
@@ -67,7 +67,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		}
 
 		pub let content: String
-		access(self) let hiddenContent: String?
+		pub let hiddenContent: String?
 		pub fun hasHiddenContent(): Bool {
 			return self.hiddenContent != nil
 		}
@@ -202,34 +202,33 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 	pub resource NFTMinter {
 		// Mint a standard DimeCollectible NFT
-		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
+		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
 			previousHistory: [[AnyStruct]]?, royalties: Royalties) {
-			for tokenId in tokenIds {
-				assert(!DimeCollectibleV3.mintedTokens.contains(tokenId),
-					message: "A token with id ".concat(tokenId.toString()).concat(" already exists"))
-
+			var counter = 0 as UInt64
+			while counter < numCopies {
+				let tokenId = DimeCollectibleV3.totalSupply + 1
 				collection.deposit(
-					token: <- create DimeCollectibleV3.NFT (
+					token: <- create DimeCollectibleV3.NFT(
 						id: tokenId, type: NFTType.standard, creators: creators,
 						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
 						firstOwner: collection.owner!.address, previousHistory: previousHistory ?? [],
 						royalties: royalties
 					)
 				)
-				DimeCollectibleV3.mintedTokens.append(tokenId)
-				DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + (1 as UInt64)
+				DimeCollectibleV3.totalSupply = tokenId
 
 				emit Minted(id: tokenId)
+				counter = counter + 1
 			}
 		}
 
-		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
-			creators: [Address], content: String, tradeable: Bool) {
-			for tokenId in tokenIds {
-				assert(!DimeCollectibleV3.mintedTokens.contains(tokenId),
-					message: "A token with id ".concat(tokenId.toString()).concat(" already exists"))
-
+		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
+			creators: [Address], content: String, tradeable: Bool): [UInt64] {
+			var counter = 0 as UInt64
+			let idsUsed: [UInt64] = []
+			while counter < numCopies {
+				let tokenId = DimeCollectibleV3.totalSupply + 1
 				collection.deposit(
 					token: <- create DimeCollectibleV3.NFT (
 						id: tokenId, type: NFTType.royalty, creators: creators,
@@ -238,20 +237,20 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 						royalties: nil
 					)
 				)
-				DimeCollectibleV3.mintedTokens.append(tokenId)
-				DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + (1 as UInt64)
+				DimeCollectibleV3.totalSupply = tokenId
 
 				emit Minted(id: tokenId)
+				idsUsed.append(tokenId)
 			}
+			return idsUsed
 		}
 
-		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
+		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
 			previousHistory: [[AnyStruct]]?, royalties: Royalties) {
-			for tokenId in tokenIds {
-				assert(!DimeCollectibleV3.mintedTokens.contains(tokenId),
-					message: "A token with id ".concat(tokenId.toString()).concat(" already exists"))
-
+			var counter = 0 as UInt64
+			while counter < numCopies {
+				let tokenId = DimeCollectibleV3.totalSupply + 1
 				collection.deposit(
 					token: <- create DimeCollectibleV3.NFT (
 						id: tokenId, type: NFTType.standard, creators: creators,
@@ -260,8 +259,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 						royalties: royalties
 					)
 				)
-				DimeCollectibleV3.mintedTokens.append(tokenId)
-				DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + (1 as UInt64)
+				DimeCollectibleV3.totalSupply = tokenId
 
 				emit Minted(id: tokenId)
 			}
@@ -277,7 +275,6 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		// Initialize the total supply
 		self.totalSupply = 0
-		self.mintedTokens = []
 
 		// Create a Minter resource and save it to storage.
 		// Create a public link so all users can use the same global one

@@ -120,9 +120,15 @@ pub contract DimeRoyalties {
             return &(self.releases[id]) as &Release
         }
 
-        pub fun createRelease(collection: &{NonFungibleToken.CollectionPublic}, tokenIds: [UInt64],
-            totalRoyalties: UFix64, creators: [Address], royaltyContent: String, tradeable: Bool,
+        pub fun createRelease(collection: &DimeCollectibleV3.Collection{NonFungibleToken.CollectionPublic}, totalRoyalties: UFix64,
+            numRoyaltyNFTs: UInt64, creators: [Address], royaltyContent: String, tradeable: Bool,
             saleShares: SaleShares) {
+            let minterAddress: Address = 0xf5cdaace879e5a79
+            let minterRef = getAccount(minterAddress)
+                .getCapability<&DimeCollectibleV3.NFTMinter>(DimeCollectibleV3.MinterPublicPath)
+                .borrow()!
+            let tokenIds = minterRef.mintRoyaltyNFTs(collection: collection, numCopies: numRoyaltyNFTs,
+                creators: creators, content: royaltyContent, tradeable: tradeable)
 
             let release <- create Release(id: self.nextReleaseId, totalRoyalties: totalRoyalties,
                 royaltyIds: tokenIds, saleShares: saleShares)
@@ -130,15 +136,6 @@ pub contract DimeRoyalties {
             // This should always be null, but we need to handle this explicitly
             destroy existing
             self.nextReleaseId = self.nextReleaseId + (1 as UInt64)
-
-            let minterAddress: Address = 0x056a9cc93a020fad // 0x056a9cc93a020fad for testnet. 0xf5cdaace879e5a79 for mainnet
-            let minterRef = getAccount(minterAddress)
-                .getCapability<&DimeCollectibleV3.NFTMinter>(DimeCollectibleV3.MinterPublicPath)
-                .borrow()!
-
-            let releaseReference = &(self.releases[self.nextReleaseId]) as &Release{ReleasePublic}
-            minterRef.mintRoyaltyNFTs(collection: collection, tokenIds: tokenIds,
-                creators: creators, content: royaltyContent, tradeable: tradeable)
         }
     }
 
