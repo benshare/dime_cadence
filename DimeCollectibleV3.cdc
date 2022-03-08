@@ -14,6 +14,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 	// Named Paths
 	pub let CollectionStoragePath: StoragePath
+	pub let CollectionPrivatePath: PrivatePath
 	pub let CollectionPublicPath: PublicPath
 	pub let MinterStoragePath: StoragePath
 	pub let MinterPublicPath: PublicPath
@@ -178,12 +179,11 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		// Gets a reference to an NFT in the collection as a DimeCollectibleV3.
 		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV3.NFT? {
-			if self.ownedNFTs[id] != nil {
-				let ref = &self.ownedNFTs[id] as auth &NonFungibleToken.NFT
-				return ref as! &DimeCollectibleV3.NFT
-			} else {
+			if self.ownedNFTs[id] == nil {
 				return nil
 			}
+			let ref = &self.ownedNFTs[id] as auth &NonFungibleToken.NFT
+			return ref as! &DimeCollectibleV3.NFT
 		}
 
 		destroy() {
@@ -269,6 +269,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 	init() {
 		// Set our named paths
 		self.CollectionStoragePath = /storage/DimeCollectionV3
+		self.CollectionPrivatePath = /private/DimeCollectionV3
 		self.CollectionPublicPath = /public/DimeCollectionV3
 		self.MinterStoragePath = /storage/DimeMinterV3
 		self.MinterPublicPath = /public/DimeMinterV3

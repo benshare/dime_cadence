@@ -7,6 +7,7 @@ import NonFungibleToken from 0x1d7e57aa55817448
 
 pub contract DimeRoyalties {
     pub let ReleasesStoragePath: StoragePath
+    pub let ReleasesPrivatePath: PrivatePath
     pub let ReleasesPublicPath: PublicPath
 
 	pub struct SaleShares {
@@ -145,6 +146,7 @@ pub contract DimeRoyalties {
 
 	init () {
 		self.ReleasesStoragePath = /storage/Releases
+		self.ReleasesPrivatePath = /private/Releases
 		self.ReleasesPublicPath = /public/Releases
 	}
 }

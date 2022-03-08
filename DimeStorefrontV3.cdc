@@ -18,6 +18,7 @@ pub contract DimeStorefrontV3 {
 
 	// Named paths
 	pub let StorefrontStoragePath: StoragePath
+	pub let StorefrontPrivatePath: PrivatePath
 	pub let StorefrontPublicPath: PublicPath
 
 	// This struct represents the recipients of the earnings from a sale.
@@ -319,6 +320,7 @@ pub contract DimeStorefrontV3 {
 
 	init () {
 		self.StorefrontStoragePath = /storage/DimeStorefrontV3
+		self.StorefrontPrivatePath = /private/DimeStorefrontV3
 		self.StorefrontPublicPath = /public/DimeStorefrontV3
 	}
 }
