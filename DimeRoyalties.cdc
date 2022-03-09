@@ -173,7 +173,7 @@ pub contract DimeRoyalties {
 
             // The creator still owns all the related tokens, so we proceed by burning them
             for id in release.getRoyaltyIds().concat(release.getReleaseIds()) {
-                let nft <- collectionRef.withdraw(withdrawId: id)
+                let nft <- collectionRef.withdraw(withdrawID: id)
                 destroy nft
             }
             destroy release
