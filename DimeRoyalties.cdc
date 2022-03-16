@@ -185,8 +185,8 @@ pub contract DimeRoyalties {
     }
 
 	init () {
-		self.ReleasesStoragePath = /storage/Releases
-		self.ReleasesPrivatePath = /private/Releases
-		self.ReleasesPublicPath = /public/Releases
+		self.ReleasesStoragePath = /storage/DimeReleases
+		self.ReleasesPrivatePath = /private/DimeReleases
+		self.ReleasesPublicPath = /public/DimeReleases
 	}
 }

@@ -253,7 +253,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 				let tokenId = DimeCollectibleV3.totalSupply + 1
 				collection.deposit(
 					token: <- create DimeCollectibleV3.NFT (
-						id: tokenId, type: NFTType.standard, creators: creators,
+						id: tokenId, type: NFTType.release, creators: creators,
 						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
 						firstOwner: collection.owner!.address, previousHistory: previousHistory ?? [],
 						royalties: royalties
