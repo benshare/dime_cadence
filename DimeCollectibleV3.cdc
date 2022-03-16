@@ -77,6 +77,8 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			return self.hiddenContent != nil
 		}
 
+		pub let serialNumber: UInt64
+
 		access(self) var history: [Transaction]
 		pub fun getHistory(): [Transaction] {
 			return self.history
@@ -96,8 +98,8 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 
 		init(id: UInt64, type: NFTType, creators: [Address], content: String,
-			hiddenContent: String?, tradeable: Bool, firstOwner: Address,
-			previousHistory: [Transaction]?, royalties: Royalties?) {
+			hiddenContent: String?, serialNumber: UInt64, tradeable: Bool,
+			firstOwner: Address, previousHistory: [Transaction]?, royalties: Royalties?) {
 			if (type == NFTType.standard || type == NFTType.release) {
 				assert(royalties != nil,
 					message: "Royalties must be provided for standard and release NFTs")
@@ -108,6 +110,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			self.creators = creators
 			self.content = content
 			self.hiddenContent = hiddenContent
+			self.serialNumber = serialNumber
 			self.history = []
 			self.previousHistory = previousHistory
 			self.royalties = royalties
@@ -209,18 +212,17 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
 			previousHistory: [Transaction]?, royalties: Royalties) {
-			var counter = 0 as UInt64
-			while counter < numCopies {
-				let tokenId = DimeCollectibleV3.totalSupply + 1
+			var counter = 1 as UInt64
+			while counter <= numCopies {
+				let tokenId = DimeCollectibleV3.totalSupply + counter
 				collection.deposit(
 					token: <- create DimeCollectibleV3.NFT(
-						id: tokenId, type: NFTType.standard, creators: creators,
-						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
+						id: tokenId, type: NFTType.standard, creators: creators, content: content,
+						hiddenContent: hiddenContent, serialNumber: counter, tradeable: tradeable,
 						firstOwner: collection.owner!.address, previousHistory: previousHistory,
 						royalties: royalties
 					)
 				)
-				DimeCollectibleV3.totalSupply = tokenId
 
 				emit Minted(id: tokenId)
 				counter = counter + 1
@@ -229,22 +231,22 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, tradeable: Bool): [UInt64] {
-			var counter = 0 as UInt64
+			var counter = 1 as UInt64
 			let idsUsed: [UInt64] = []
-			while counter < numCopies {
-				let tokenId = DimeCollectibleV3.totalSupply + 1
+			while counter <= numCopies {
+				let tokenId = DimeCollectibleV3.totalSupply + counter
 				collection.deposit(
 					token: <- create DimeCollectibleV3.NFT (
-						id: tokenId, type: NFTType.royalty, creators: creators,
-						content: content, hiddenContent: nil, tradeable: tradeable,
+						id: tokenId, type: NFTType.royalty, creators: creators, content: content,
+						hiddenContent: nil, serialNumber: counter, tradeable: tradeable,
 						firstOwner: collection.owner!.address, previousHistory: nil,
 						royalties: nil
 					)
 				)
-				DimeCollectibleV3.totalSupply = tokenId
 
 				emit Minted(id: tokenId)
 				idsUsed.append(tokenId)
+				counter = counter + 1
 			}
 			return idsUsed
 		}
@@ -252,20 +254,20 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
 			previousHistory: [Transaction]?, royalties: Royalties) {
-			var counter = 0 as UInt64
-			while counter < numCopies {
-				let tokenId = DimeCollectibleV3.totalSupply + 1
+			var counter = 1 as UInt64
+			while counter <= numCopies {
+				let tokenId = DimeCollectibleV3.totalSupply + counter
 				collection.deposit(
 					token: <- create DimeCollectibleV3.NFT (
-						id: tokenId, type: NFTType.release, creators: creators,
-						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
+						id: tokenId, type: NFTType.release, creators: creators, content: content,
+						hiddenContent: hiddenContent, serialNumber: counter, tradeable: tradeable,
 						firstOwner: collection.owner!.address, previousHistory: previousHistory,
 						royalties: royalties
 					)
 				)
-				DimeCollectibleV3.totalSupply = tokenId
 
 				emit Minted(id: tokenId)
+				counter = counter + 1
 			}
 		}
 	}
