@@ -6,6 +6,10 @@ import FUSD from 0x3c5959b568896393
 import NonFungibleToken from 0x1d7e57aa55817448
 
 pub contract DimeRoyalties {
+    // Events
+	pub event ReleaseCreated(releaseId: UInt64)
+
+    // Named Paths
     pub let ReleasesStoragePath: StoragePath
     pub let ReleasesPrivatePath: PrivatePath
     pub let ReleasesPublicPath: PublicPath
@@ -29,6 +33,7 @@ pub contract DimeRoyalties {
 	}
 
     pub resource interface ReleasePublic {
+        pub let id: UInt64
         pub let totalRoyalties: UFix64
         pub fun getRoyaltyIds(): [UInt64]
         pub fun getRoyaltyOwners(): {UInt64: Address?}
@@ -157,6 +162,8 @@ pub contract DimeRoyalties {
             let existing <- self.releases[self.nextReleaseId] <- release
             // This should always be null, but we need to handle this explicitly
             destroy existing
+
+            emit ReleaseCreated(releaseId: self.nextReleaseId)
             self.nextReleaseId = self.nextReleaseId + (1 as UInt64)
         }
 
