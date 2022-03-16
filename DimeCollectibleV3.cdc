@@ -47,6 +47,20 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		}
 	}
 
+	pub struct Transaction {
+		pub let seller: Address
+		pub let buyer: Address
+		pub let price: UFix64
+		pub let time: UFix64
+
+		init(seller: Address, buyer: Address, price: UFix64, time: UFix64) {
+			self.seller = seller
+			self.buyer = buyer
+			self.price = price
+			self.time = time
+		}
+	}
+
 	// DimeCollectible NFT, representing three distinct NFTTypes
 	pub resource NFT: NonFungibleToken.INFT {
 		pub let id: UInt64
@@ -63,12 +77,12 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			return self.hiddenContent != nil
 		}
 
-		access(self) var history: [[AnyStruct]]
-		pub fun getHistory(): [[AnyStruct]] {
+		access(self) var history: [Transaction]
+		pub fun getHistory(): [Transaction] {
 			return self.history
 		}
-		access(self) let previousHistory: [[AnyStruct]]?
-		pub fun getPreviousHistory(): [[AnyStruct]]? {
+		access(self) let previousHistory: [Transaction]?
+		pub fun getPreviousHistory(): [Transaction]? {
 			return self.previousHistory
 		}
 
@@ -83,7 +97,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		init(id: UInt64, type: NFTType, creators: [Address], content: String,
 			hiddenContent: String?, tradeable: Bool, firstOwner: Address,
-			previousHistory: [[AnyStruct]]?, royalties: Royalties?) {
+			previousHistory: [Transaction]?, royalties: Royalties?) {
 			if (type == NFTType.standard || type == NFTType.release) {
 				assert(royalties != nil,
 					message: "Royalties must be provided for standard and release NFTs")
@@ -94,7 +108,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			self.creators = creators
 			self.content = content
 			self.hiddenContent = hiddenContent
-			self.history = [[firstOwner]]
+			self.history = []
 			self.previousHistory = previousHistory
 			self.royalties = royalties
 			self.tradeable = tradeable
@@ -102,8 +116,8 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		}
 
 		access(self) fun addSale(toUser: Address, atPrice: UFix64) {
-			let newEntry: [AnyStruct] = [toUser, atPrice]
-			self.history.append(newEntry)
+			self.history.append(Transaction(seller: self.owner!.address, buyer: toUser,
+				price: atPrice, time: getCurrentBlock().timestamp))
 		}
 	}
 
@@ -194,7 +208,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		// Mint a standard DimeCollectible NFT
 		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
-			previousHistory: [[AnyStruct]]?, royalties: Royalties) {
+			previousHistory: [Transaction]?, royalties: Royalties) {
 			var counter = 0 as UInt64
 			while counter < numCopies {
 				let tokenId = DimeCollectibleV3.totalSupply + 1
@@ -202,7 +216,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 					token: <- create DimeCollectibleV3.NFT(
 						id: tokenId, type: NFTType.standard, creators: creators,
 						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
-						firstOwner: collection.owner!.address, previousHistory: previousHistory ?? [],
+						firstOwner: collection.owner!.address, previousHistory: previousHistory,
 						royalties: royalties
 					)
 				)
@@ -237,7 +251,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
 			creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
-			previousHistory: [[AnyStruct]]?, royalties: Royalties) {
+			previousHistory: [Transaction]?, royalties: Royalties) {
 			var counter = 0 as UInt64
 			while counter < numCopies {
 				let tokenId = DimeCollectibleV3.totalSupply + 1
@@ -245,7 +259,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 					token: <- create DimeCollectibleV3.NFT (
 						id: tokenId, type: NFTType.release, creators: creators,
 						content: content, hiddenContent: hiddenContent, tradeable: tradeable,
-						firstOwner: collection.owner!.address, previousHistory: previousHistory ?? [],
+						firstOwner: collection.owner!.address, previousHistory: previousHistory,
 						royalties: royalties
 					)
 				)
