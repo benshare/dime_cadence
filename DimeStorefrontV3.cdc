@@ -52,7 +52,7 @@ pub contract DimeStorefrontV3 {
 		pub fun getCreators(): [Address]
 		pub let content: String
 		pub let hasHiddenContent: Bool
-		pub fun getHistory(): [[AnyStruct]]
+		pub fun getHistory(): [DimeCollectibleV3.Transaction]
 
 		pub let isInitialSale: Bool
 		pub let dimeFee: UFix64
@@ -82,8 +82,8 @@ pub contract DimeStorefrontV3 {
 
 		pub let content: String
 		pub let hasHiddenContent: Bool
-		access(self) let history: [[AnyStruct]]
-		pub fun getHistory(): [[AnyStruct]] {
+		access(self) let history: [DimeCollectibleV3.Transaction]
+		pub fun getHistory(): [DimeCollectibleV3.Transaction] {
 			return self.history
 		}
 
@@ -141,11 +141,11 @@ pub contract DimeStorefrontV3 {
 				shares = saleShares!
 			} else if (nft.type == DimeCollectibleV3.NFTType.royalty) {
 				// TODO: calculate sale shares including royalty NFTs.
-				shares = SaleShares(recipients: release!.borrow()!.getSaleShares().getRecipients())
+				shares = SaleShares(allotments: release!.borrow()!.getSaleShares().getShares())
 			} else {
 				// If it's a release NFT, we want to set shares according
 				// to what's specified in the release
-				shares = SaleShares(recipients: release!.borrow()!.getSaleShares().getRecipients())
+				shares = SaleShares(allotments: release!.borrow()!.getSaleShares().getShares())
 			}
 			self.saleShares = shares!
 
