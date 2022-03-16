@@ -227,6 +227,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 				emit Minted(id: tokenId)
 				counter = counter + 1
 			}
+			DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + numCopies
 		}
 
 		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, numCopies: UInt64,
@@ -248,6 +249,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 				idsUsed.append(tokenId)
 				counter = counter + 1
 			}
+			DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + numCopies
 			return idsUsed
 		}
 
@@ -269,6 +271,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 				emit Minted(id: tokenId)
 				counter = counter + 1
 			}
+			DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + numCopies
 		}
 	}
 
