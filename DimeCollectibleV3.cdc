@@ -29,31 +29,21 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		pub case release
 	}
 
-	pub struct Recipient {
-		pub let vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>
-		pub let allotment: UFix64
-
-		init(vault: Capability<&FUSD.Vault{FungibleToken.Receiver}>, allotment: UFix64) {
-			assert(allotment > 0.0, message: "Each recipient must receive an allotment > 0")
-			self.vault = vault
-			self.allotment = allotment
-		}
-	}
-
 	pub struct Royalties {
-		access(self) let recipients: {Address: Recipient}
+		access(self) let allotments: {Address: UFix64}
 
-		init(recipients: {Address: Recipient}) {
+		init(allotments: {Address: UFix64}) {
 			var total = 0.0
-			for recipient in recipients.values {
-				total = total + recipient.allotment
+			for allotment in allotments.values {
+				assert(allotment > 0.0, message: "Each recipient must receive an allotment > 0")
+				total = total + allotment
 			}
 			assert(total <= 0.5, message: "Total royalties cannot be more than 50%")
-			self.recipients = recipients
+			self.allotments = allotments
 		}
 
-		pub fun getRecipients(): {Address: Recipient} {
-			return self.recipients
+		pub fun getRoyalties(): {Address: UFix64} {
+			return self.allotments
 		}
 	}
 

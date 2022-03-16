@@ -26,19 +26,20 @@ pub contract DimeStorefrontV3 {
 	// royalties--are distributed among the recipients' vaults according to
 	// their allotments
 	pub struct SaleShares {
-		access(self) let recipients: {Address: DimeCollectibleV3.Recipient}
+		access(self) let allotments: {Address: UFix64}
 
-		init(recipients: {Address: DimeCollectibleV3.Recipient}) {
+		init(allotments: {Address: UFix64}) {
 			var total = 0.0
-			for recipient in recipients.values {
-				total = total + recipient.allotment
+			for allotment in allotments.values {
+				assert(allotment > 0.0, message: "Each recipient must receive an allotment > 0")
+				total = total + allotment
 			}
 			assert(total == 1.0, message: "Total sale shares must equal exactly 1")
-			self.recipients = recipients
+			self.allotments = allotments
 		}
 
-		pub fun getRecipients(): {Address: DimeCollectibleV3.Recipient} {
-			return self.recipients
+		pub fun getShares(): {Address: UFix64} {
+			return self.allotments
 		}
 	}
 
