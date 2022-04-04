@@ -8,6 +8,7 @@ import NonFungibleToken from 0x1d7e57aa55817448
 pub contract DimeRoyalties {
     // Events
 	pub event ReleaseCreated(releaseId: UInt64)
+    pub event RoyaltyNFTAdded(itemId: UInt64)
 
     // Named Paths
     pub let ReleasesStoragePath: StoragePath
@@ -34,29 +35,41 @@ pub contract DimeRoyalties {
 
     pub resource interface ReleasePublic {
         pub let id: UInt64
-        pub let totalRoyalties: UFix64
+        pub let royaltiesPerShare: UFix64
+        pub let numRoyaltyNFTs: UInt64
         pub fun getRoyaltyIds(): [UInt64]
-        pub fun getRoyaltyOwners(): {UInt64: Address?}
+        pub fun getRoyaltyOwners(): {UInt64: Address}
         pub fun updateOwner(id: UInt64, newOwner: Address)
         pub fun getReleaseIds(): [UInt64]
-        pub fun getSaleShares(): SaleShares
+        pub let managerFees: UFix64
+        pub fun getArtistShares(): SaleShares
+        pub fun getManagerShares(): SaleShares
+        pub fun getMergedArtistShares(): SaleShares
     }
 
     pub resource Release: ReleasePublic {
         pub let id: UInt64
 
-        pub let totalRoyalties: UFix64
+        pub let royaltiesPerShare: UFix64
+        pub let numRoyaltyNFTs: UInt64
 
         // Map from each royalty NFT ID to the current owner.
         // When a royalty NFT is purchased, the corresponding address is updated.
         // When a release NFT is purchased, this list is used to pay the owners of
         // the royalty NFTs
-        access(self) let royaltyNFTs: {UInt64: Address?}
+        access(self) let royaltyNFTs: {UInt64: Address}
         pub fun getRoyaltyIds(): [UInt64] {
             return self.royaltyNFTs.keys
         }
-        pub fun getRoyaltyOwners(): {UInt64: Address?} {
+        pub fun getRoyaltyOwners(): {UInt64: Address} {
             return self.royaltyNFTs
+        }
+
+        pub fun addRoyaltyNFT(id: UInt64) {
+            assert(UInt64(self.royaltyNFTs.keys.length) < self.numRoyaltyNFTs,
+                message: "This release already has the maximum number of royalty NFTs")
+            self.royaltyNFTs[id] = self.owner!.address
+            emit RoyaltyNFTAdded(itemId: id)
         }
 
         // Called whenever a royalty NFT is purchased.
@@ -89,25 +102,64 @@ pub contract DimeRoyalties {
         }
 
         // How the proceeds from sales of this release will be divided
-        access(self) var saleShares: SaleShares
-        pub fun getSaleShares(): SaleShares {
-			return self.saleShares
+        pub let managerFees: UFix64
+        access(self) var artistShares: SaleShares
+        access(self) var managerShares: SaleShares
+        pub fun getArtistShares(): SaleShares {
+			return self.artistShares
 		}
-		pub fun setSaleShares(newShares: SaleShares) {
-			self.saleShares = newShares
+        pub fun getManagerShares(): SaleShares {
+			return self.managerShares
 		}
+        // Return the shares given to the artist with the royalties they've sold
+        // factored in
+        pub fun getMergedArtistShares(): SaleShares {
+            let allotments: {Address: UFix64} = {}
 
-        pub init(id: UInt64, totalRoyalties: UFix64, royaltyIds: [UInt64],
-            saleShares: SaleShares) {
-            self.id = id
-            self.totalRoyalties = totalRoyalties
-            let royalties: {UInt64: Address} = {}
-            for royaltyId in royaltyIds {
-                royalties[royaltyId] = nil
+            let totalRoyalties = self.royaltiesPerShare * UFix64(self.numRoyaltyNFTs)
+            for recipient in self.artistShares.getShares().keys {
+                let value = self.artistShares.getShares()[recipient]!
+                    * (1.0 - totalRoyalties)
+                if allotments.keys.contains(recipient) {
+                    allotments[recipient] = allotments[recipient]! + value
+                } else {
+                    allotments[recipient] = value
+                }
             }
-            self.royaltyNFTs = royalties
+
+            for recipient in self.royaltyNFTs.values {
+                let value = self.royaltiesPerShare
+                if allotments.keys.contains(recipient) {
+                    allotments[recipient] = allotments[recipient]! + value
+                } else {
+                    allotments[recipient] = value
+                }
+            }
+
+            return SaleShares(allotments: allotments)
+        }
+        pub let secondarySaleRoyalties: DimeCollectibleV3.Royalties
+        pub fun getSecondarySaleRoyalties():  DimeCollectibleV3.Royalties {
+            return self.secondarySaleRoyalties
+        }
+
+        pub init(id: UInt64, royaltiesPerShare: UFix64, numRoyaltyNFTs: UInt64,
+            managerFees: UFix64, artistShares: SaleShares, managerShares: SaleShares,
+            secondarySaleRoyalties: DimeCollectibleV3.Royalties) {
+            self.id = id
+            self.royaltiesPerShare = royaltiesPerShare
+            self.numRoyaltyNFTs = numRoyaltyNFTs
+            self.royaltyNFTs = {}
             self.releaseNFTs = []
-            self.saleShares = saleShares
+
+            assert(managerFees >= 0.1 && managerFees <= 0.9,
+                message: "Manager cut must be between 0.1 and 0.9")
+
+            self.managerFees = managerFees
+            self.artistShares = artistShares
+            self.managerShares = managerShares
+
+            self.secondarySaleRoyalties = secondarySaleRoyalties
         }
     }
 
@@ -147,18 +199,16 @@ pub contract DimeRoyalties {
             return &(self.releases[id]) as &Release
         }
 
-        pub fun createRelease(collection: &DimeCollectibleV3.Collection{NonFungibleToken.CollectionPublic}, totalRoyalties: UFix64,
-            numRoyaltyNFTs: UInt64, creators: [Address], royaltyContent: String, tradeable: Bool,
-            saleShares: SaleShares) {
+        pub fun createRelease(collection: &DimeCollectibleV3.Collection{NonFungibleToken.CollectionPublic},
+            totalRoyalties: UFix64, numRoyaltyNFTs: UInt64, tradeable: Bool, managerFees: UFix64,
+            artistShares: SaleShares, managerShares: SaleShares, secondarySaleRoyalties: DimeCollectibleV3.Royalties) {
             let minterAddress: Address = 0xf5cdaace879e5a79
             let minterRef = getAccount(minterAddress)
                 .getCapability<&DimeCollectibleV3.NFTMinter>(DimeCollectibleV3.MinterPublicPath)
                 .borrow()!
-            let tokenIds = minterRef.mintRoyaltyNFTs(collection: collection, numCopies: numRoyaltyNFTs,
-                creators: creators, content: royaltyContent, tradeable: tradeable)
-
-            let release <- create Release(id: self.nextReleaseId, totalRoyalties: totalRoyalties,
-                royaltyIds: tokenIds, saleShares: saleShares)
+            let release <- create Release(id: self.nextReleaseId, royaltiesPerShare: totalRoyalties / UFix64(numRoyaltyNFTs),
+                numRoyaltyNFTs: numRoyaltyNFTs, managerFees: managerFees, artistShares: artistShares,
+                managerShares: managerShares, secondarySaleRoyalties: secondarySaleRoyalties)
             let existing <- self.releases[self.nextReleaseId] <- release
             // This should always be null, but we need to handle this explicitly
             destroy existing
