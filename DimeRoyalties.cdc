@@ -15,6 +15,8 @@ pub contract DimeRoyalties {
     pub let ReleasesPrivatePath: PrivatePath
     pub let ReleasesPublicPath: PublicPath
 
+    access(self) var nextReleaseId: UInt64
+
 	pub struct SaleShares {
 		access(self) let allotments: {Address: UFix64}
 
@@ -170,11 +172,9 @@ pub contract DimeRoyalties {
 
     pub resource ReleaseCollection: ReleaseCollectionPublic {
         pub let releases: @{UInt64: Release}
-        pub var nextReleaseId: UInt64
 
         init() {
             self.releases <- {}
-            self.nextReleaseId = 0
         }
         
         destroy () {
@@ -206,15 +206,15 @@ pub contract DimeRoyalties {
             let minterRef = getAccount(minterAddress)
                 .getCapability<&DimeCollectibleV3.NFTMinter>(DimeCollectibleV3.MinterPublicPath)
                 .borrow()!
-            let release <- create Release(id: self.nextReleaseId, royaltiesPerShare: totalRoyalties / UFix64(numRoyaltyNFTs),
+            let release <- create Release(id: DimeRoyalties.nextReleaseId, royaltiesPerShare: totalRoyalties / UFix64(numRoyaltyNFTs),
                 numRoyaltyNFTs: numRoyaltyNFTs, managerFees: managerFees, artistShares: artistShares,
                 managerShares: managerShares, secondarySaleRoyalties: secondarySaleRoyalties)
-            let existing <- self.releases[self.nextReleaseId] <- release
+            let existing <- self.releases[DimeRoyalties.nextReleaseId] <- release
             // This should always be null, but we need to handle this explicitly
             destroy existing
 
-            emit ReleaseCreated(releaseId: self.nextReleaseId)
-            self.nextReleaseId = self.nextReleaseId + (1 as UInt64)
+            emit ReleaseCreated(releaseId: DimeRoyalties.nextReleaseId)
+            DimeRoyalties.nextReleaseId = DimeRoyalties.nextReleaseId + (1 as UInt64)
         }
 
         // A release can only be deleted if the creator still owns all the associated royalty
@@ -246,5 +246,7 @@ pub contract DimeRoyalties {
 		self.ReleasesStoragePath = /storage/DimeReleases
 		self.ReleasesPrivatePath = /private/DimeReleases
 		self.ReleasesPublicPath = /public/DimeReleases
+
+        self.nextReleaseId = 0
 	}
 }
