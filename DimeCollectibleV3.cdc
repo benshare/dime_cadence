@@ -99,7 +99,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		init(id: UInt64, type: NFTType, creators: [Address], content: String,
 			hiddenContent: String?, blueprintId: UInt64, serialNumber: UInt64, tradeable: Bool,
-			history: [Transaction]?, previousHistory: [Transaction]?, royalties: Royalties?) {
+			history: [Transaction], previousHistory: [Transaction]?, royalties: Royalties?) {
 			if (type == NFTType.standard || type == NFTType.release) {
 				assert(royalties != nil,
 					message: "Royalties must be provided for standard and release NFTs")
@@ -112,7 +112,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			self.hiddenContent = hiddenContent
 			self.blueprintId = blueprintId
 			self.serialNumber = serialNumber
-			self.history = history ?? []
+			self.history = history
 			self.previousHistory = previousHistory
 			self.royalties = royalties
 			self.tradeable = tradeable
