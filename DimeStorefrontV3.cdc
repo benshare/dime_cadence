@@ -43,73 +43,6 @@ pub contract DimeStorefrontV3 {
 		}
 	}
 
-	pub fun saleSharesWithFees(shares: SaleShares, dimeFee: UFix64, royalties: DimeCollectibleV3.Royalties?): SaleShares {
-		let allotments: {Address: UFix64} = {}
-		var fees = 0.0
-
-		let minterAddress: Address = 0x1c7acdf4bdc4db29
-		allotments[minterAddress] = dimeFee
-		fees = fees + dimeFee
-
-		if (royalties != nil) {
-			let royaltyShares = royalties!.getShares()
-			for recipient in royaltyShares.keys {
-				let value = royaltyShares[recipient]!
-				if allotments.keys.contains(recipient) {
-					allotments[recipient] = allotments[recipient]! + value
-				} else {
-					allotments[recipient] = value
-				}
-				fees = fees + value
-			}
-		}
-		
-		let remaining = 1.0 - fees
-		let saleShares = shares.getShares()
-		for recipient in saleShares.keys {
-			let value = saleShares[recipient]! * remaining
-			if allotments.keys.contains(recipient) {
-				allotments[recipient] = allotments[recipient]! + value
-			} else {
-				allotments[recipient] = value
-			}
-		}
-
-		return SaleShares(allotments: allotments)
-	}
-
-	pub fun saleSharesForRelease(artistShares: DimeRoyalties.SaleShares, managerShares: DimeRoyalties.SaleShares,
-		managerFees: UFix64, dimeFee: UFix64): SaleShares {
-		let allotments: {Address: UFix64} = {}
-
-		let minterAddress: Address = 0x1c7acdf4bdc4db29
-		allotments[minterAddress] = dimeFee
-
-		let remainingFee = managerFees - dimeFee
-		let manShares = managerShares.getShares()
-		for recipient in manShares.keys {
-			let value = manShares[recipient]! * remainingFee
-			if allotments.keys.contains(recipient) {
-				allotments[recipient] = allotments[recipient]! + value
-			} else {
-				allotments[recipient] = value
-			}
-		}
-
-		let remaining = 1.0 - managerFees
-		let artShares = artistShares.getShares()
-		for recipient in artShares.keys {
-			let value = artShares[recipient]! * remaining
-			if allotments.keys.contains(recipient) {
-				allotments[recipient] = allotments[recipient]! + value
-			} else {
-				allotments[recipient] = value
-			}
-		}
-
-		return SaleShares(allotments: allotments)
-	}
-
 	// An interface providing a read-only view of a SaleOffer
 	pub resource interface SaleOfferPublic {
 		pub let itemId: UInt64
@@ -183,12 +116,6 @@ pub contract DimeStorefrontV3 {
 			price: UFix64,
 			saleShares: SaleShares
 		)
-		pub fun createReleaseSaleOffers(
-			itemProvider: Capability<&DimeCollectibleV3.Collection{DimeCollectibleV3.DimeCollectionPublic, NonFungibleToken.Provider}>,
-			release: &DimeRoyalties.Release{DimeRoyalties.ReleasePublic},
-			items: [UInt64],
-			price: UFix64
-		)
 		pub fun removeSaleOffers(itemIds: [UInt64], beingPurchased: Bool)
 		pub fun setPrices(itemIds: [UInt64], newPrice: UFix64)
 		pub fun setSaleShares(itemIds: [UInt64], newShares: SaleShares)
@@ -227,53 +154,12 @@ pub contract DimeStorefrontV3 {
 				if (nft.getHistory().length > 0 && !nft.tradeable) {
 					panic("Tried to put an untradeable item on sale")
 				}
-
-				let dimeFee = nft.getHistory().length == 0 ? 0.1 : 0.04
-				let royalties = nft.getRoyalties()
-				let scaledShares = DimeStorefrontV3.saleSharesWithFees(shares: saleShares, dimeFee: dimeFee, royalties: royalties)
 			
 				let newOffer <- create SaleOffer(
 					nft: nft,
 					sellerItemProvider: itemProvider,
 					price: price,
-					saleShares: scaledShares
-				)
-
-				// Add the new offer to the dictionary, overwriting an old one if it exists
-				let oldOffer <- self.saleOffers[itemId] <- newOffer
-				destroy oldOffer
-			}
-		}
-
-		pub fun createReleaseSaleOffers(
-			itemProvider: Capability<&DimeCollectibleV3.Collection{DimeCollectibleV3.DimeCollectionPublic, NonFungibleToken.Provider}>,
-			release: &DimeRoyalties.Release{DimeRoyalties.ReleasePublic},
-			items: [UInt64],
-			price: UFix64
-		) {
-			assert(itemProvider.borrow() != nil, message: "Couldn't get a capability to the seller's collection")
-
-			for itemId in items {
-				let nft = itemProvider.borrow()!.borrowCollectible(id: itemId) ?? panic("Couldn't borrow nft from seller")
-				if (nft.getHistory().length > 0 && !nft.tradeable) {
-					panic("Tried to put an untradeable item on sale")
-				}
-
-				let artistShares = nft.type == DimeCollectibleV3.NFTType.royalty
-					? release.getArtistShares()
-					: release.getMergedArtistShares()
-				let managerShares = release.getManagerShares()
-				let managerFees = release.managerFees
-				let dimeFee = nft.getHistory().length == 0 ? 0.1 : 0.04
-
-				let scaledShares = DimeStorefrontV3.saleSharesForRelease(artistShares: artistShares,
-					managerShares: managerShares, managerFees: managerFees, dimeFee: dimeFee)
-			
-				let newOffer <- create SaleOffer(
-					nft: nft,
-					sellerItemProvider: itemProvider,
-					price: price,
-					saleShares: scaledShares
+					saleShares: saleShares
 				)
 
 				// Add the new offer to the dictionary, overwriting an old one if it exists
