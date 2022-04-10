@@ -46,7 +46,7 @@ pub contract DimeRoyalties {
         pub let managerFees: UFix64
         pub fun getArtistShares(): SaleShares
         pub fun getManagerShares(): SaleShares
-        pub fun getMergedArtistShares(): SaleShares
+        pub fun getSecondarySaleRoyalties(): DimeCollectibleV3.Royalties
     }
 
     pub resource Release: ReleasePublic {
@@ -113,33 +113,7 @@ pub contract DimeRoyalties {
         pub fun getManagerShares(): SaleShares {
 			return self.managerShares
 		}
-        // Return the shares given to the artist with the royalties they've sold
-        // factored in
-        pub fun getMergedArtistShares(): SaleShares {
-            let allotments: {Address: UFix64} = {}
 
-            let totalRoyalties = self.royaltiesPerShare * UFix64(self.numRoyaltyNFTs)
-            for recipient in self.artistShares.getShares().keys {
-                let value = self.artistShares.getShares()[recipient]!
-                    * (1.0 - totalRoyalties)
-                if allotments.keys.contains(recipient) {
-                    allotments[recipient] = allotments[recipient]! + value
-                } else {
-                    allotments[recipient] = value
-                }
-            }
-
-            for recipient in self.royaltyNFTs.values {
-                let value = self.royaltiesPerShare
-                if allotments.keys.contains(recipient) {
-                    allotments[recipient] = allotments[recipient]! + value
-                } else {
-                    allotments[recipient] = value
-                }
-            }
-
-            return SaleShares(allotments: allotments)
-        }
         pub let secondarySaleRoyalties: DimeCollectibleV3.Royalties
         pub fun getSecondarySaleRoyalties():  DimeCollectibleV3.Royalties {
             return self.secondarySaleRoyalties
