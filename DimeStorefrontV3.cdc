@@ -138,7 +138,7 @@ pub contract DimeStorefrontV3 {
 			if self.saleOffers[itemId] == nil {
 				return nil
 			}
-			return &self.saleOffers[itemId] as &SaleOffer{SaleOfferPublic}
+			return &self.saleOffers[itemId] as &SaleOffer{SaleOfferPublic}?
 		}
 
 		pub fun createSaleOffers(
