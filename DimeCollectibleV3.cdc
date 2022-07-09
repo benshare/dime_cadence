@@ -2,9 +2,10 @@
 
 import FungibleToken from 0xf233dcee88fe0abe
 import FUSD from 0x3c5959b568896393
+import MetadataViews from 0x1d7e57aa55817448
 import NonFungibleToken from 0x1d7e57aa55817448
 
-pub contract DimeCollectibleV3: NonFungibleToken {
+pub contract DimeCollectibleV4: NonFungibleToken {
 
 	// Events
 	pub event ContractInitialized()
@@ -29,24 +30,6 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		pub case release
 	}
 
-	pub struct Royalties {
-		access(self) let allotments: {Address: UFix64}
-
-		init(allotments: {Address: UFix64}) {
-			var total = 0.0
-			for allotment in allotments.values {
-				assert(allotment > 0.0, message: "Each recipient must receive an allotment > 0")
-				total = total + allotment
-			}
-			assert(total <= 0.5, message: "Total royalties cannot be more than 50%")
-			self.allotments = allotments
-		}
-
-		pub fun getShares(): {Address: UFix64} {
-			return self.allotments
-		}
-	}
-
 	pub struct Transaction {
 		pub let seller: Address
 		pub let buyer: Address
@@ -62,9 +45,11 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 	}
 
 	// DimeCollectible NFT, representing three distinct NFTTypes
-	pub resource NFT: NonFungibleToken.INFT {
+	pub resource NFT: NonFungibleToken.INFT, MetadataViews.Resolver {
 		pub let id: UInt64
 		pub let type: NFTType
+		pub let name: String
+		pub let description: String
 
 		access(self) let creators: [Address]
 		pub fun getCreators(): [Address] {
@@ -79,6 +64,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		pub let blueprintId: UInt64
 		pub let serialNumber: UInt64
+		pub let editions: UInt64
 
 		access(self) var history: [Transaction]
 		pub fun getHistory(): [Transaction] {
@@ -89,17 +75,18 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			return self.previousHistory
 		}
 
-		access(self) let royalties: Royalties?
-		pub fun getRoyalties(): Royalties? {
-			return self.royalties
+		access(self) let royalties: MetadataViews.Royalties
+		pub fun getRoyalties(): MetadataViews.Royalties {
+			return self.royalties!
 		}
 
 		pub let tradeable: Bool
 		pub let creationTime: UFix64
 
-		init(id: UInt64, type: NFTType, creators: [Address], content: String,
-			hiddenContent: String?, blueprintId: UInt64, serialNumber: UInt64, tradeable: Bool,
-			history: [Transaction], previousHistory: [Transaction]?, royalties: Royalties?) {
+		init(id: UInt64, type: NFTType, name: String, description: String, creators: [Address],
+			content: String, hiddenContent: String?, blueprintId: UInt64, serialNumber: UInt64,
+			editions: UInt64, tradeable: Bool, history: [Transaction], previousHistory: [Transaction]?,
+			royalties: MetadataViews.Royalties) {
 			if (type == NFTType.standard || type == NFTType.release) {
 				assert(royalties != nil,
 					message: "Royalties must be provided for standard and release NFTs")
@@ -107,11 +94,14 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 			self.id = id
 			self.type = type
+			self.name = name
+			self.description = description
 			self.creators = creators
 			self.content = content
 			self.hiddenContent = hiddenContent
 			self.blueprintId = blueprintId
 			self.serialNumber = serialNumber
+			self.editions = editions
 			self.history = history
 			self.previousHistory = previousHistory
 			self.royalties = royalties
@@ -123,7 +113,64 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			self.history.append(Transaction(seller: self.owner!.address, buyer: toUser,
 				price: atPrice, time: getCurrentBlock().timestamp))
 		}
+
+		pub fun getViews(): [Type] {
+			return [
+				Type<MetadataViews.Display>(),
+				Type<MetadataViews.Editions>(),
+				Type<MetadataViews.Serial>(),
+				Type<MetadataViews.Royalties>(),
+				Type<MetadataViews.ExternalURL>(),
+				Type<MetadataViews.NFTCollectionData>()
+			]
+		}
+
+		pub fun resolveView(_ view: Type): AnyStruct? {
+			switch view {
+				case Type<MetadataViews.Display>():
+					return MetadataViews.Display(
+						name: self.name,
+						description: self.description,
+
+						thumbnail: MetadataViews.HTTPFile(
+							url: self.content
+						)
+					)
+				case Type<MetadataViews.Editions>():
+					let editionInfo = MetadataViews.Edition(name: "Editions of ".concat(self.name),
+						number: self.serialNumber, max: self.editions)
+					let editionList: [MetadataViews.Edition] = [editionInfo]
+					return MetadataViews.Editions(
+						editionList
+					)
+				case Type<MetadataViews.Serial>():
+					return MetadataViews.Serial(
+						self.serialNumber
+					)
+                case Type<MetadataViews.Royalties>():
+                    return MetadataViews.Royalties(
+                        self.royalties.getRoyalties()
+                    )
+                case Type<MetadataViews.ExternalURL>():
+                    return MetadataViews.ExternalURL("https://dime.io/".concat(self.owner!.address.toString())
+						.concat("/items/").concat(self.id.toString()))
+                case Type<MetadataViews.NFTCollectionData>():
+                    return MetadataViews.NFTCollectionData(
+                        storagePath: DimeCollectibleV4.CollectionStoragePath,
+                        publicPath: DimeCollectibleV4.CollectionPublicPath,
+                        providerPath: DimeCollectibleV4.CollectionPrivatePath,
+                        publicCollection: Type<&DimeCollectibleV4.Collection{DimeCollectibleV4.DimeCollectionPublic}>(),
+                        publicLinkedType: Type<&DimeCollectibleV4.Collection{DimeCollectibleV4.DimeCollectionPublic, NonFungibleToken.CollectionPublic, NonFungibleToken.Receiver, MetadataViews.ResolverCollection}>(),
+                        providerLinkedType: Type<&DimeCollectibleV4.Collection{DimeCollectibleV4.DimeCollectionPublic, NonFungibleToken.CollectionPublic, NonFungibleToken.Provider, MetadataViews.ResolverCollection}>(),
+                        createEmptyCollectionFunction: (fun (): @NonFungibleToken.Collection {
+                            return <-DimeCollectibleV4.createEmptyCollection()
+                        })
+                    )
+			}
+			return nil
+		}
 	}
+	
 
 	// This is the interface that users can cast their Collection as
 	// to allow others to deposit into it. It also allows for
@@ -131,7 +178,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 	pub resource interface DimeCollectionPublic {
 		pub fun deposit(token: @NonFungibleToken.NFT)
 		pub fun getIDs(): [UInt64]
-		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV3.NFT? {
+		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV4.NFT? {
 			// If the result isn't nil, the id of the returned reference
 			// should be the same as the argument to the function
 			post {
@@ -146,7 +193,8 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 	// A collection of NFTs owned by an account
 	//
 	pub resource Collection: DimeCollectionPublic, NonFungibleToken.Provider,
-		NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic {
+		NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic,
+		MetadataViews.ResolverCollection {
 		// Dictionary of NFT conforming tokens
 		// NFT is a resource type with an `UInt64` ID field
 		pub var ownedNFTs: @{UInt64: NonFungibleToken.NFT}
@@ -162,7 +210,7 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 
 		// Takes a NFT and adds it to the collection dictionary
 		pub fun deposit(token: @NonFungibleToken.NFT) {
-			let token <- token as! @DimeCollectibleV3.NFT
+			let token <- token as! @DimeCollectibleV4.NFT
 
 			let id: UInt64 = token.id
 
@@ -185,13 +233,13 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 			return (&self.ownedNFTs[id] as &NonFungibleToken.NFT?)!
 		}
 
-		// Gets a reference to an NFT in the collection as a DimeCollectibleV3.
-		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV3.NFT? {
+		// Gets a reference to an NFT in the collection as a DimeCollectibleV4.
+		pub fun borrowCollectible(id: UInt64): &DimeCollectibleV4.NFT? {
 			if self.ownedNFTs[id] == nil {
 				return nil
 			}
 			let ref = &self.ownedNFTs[id] as auth &NonFungibleToken.NFT?
-			return ref as! &DimeCollectibleV3.NFT?
+			return ref as! &DimeCollectibleV4.NFT?
 		}
 
 		destroy() {
@@ -201,84 +249,101 @@ pub contract DimeCollectibleV3: NonFungibleToken {
 		init () {
 			self.ownedNFTs <- {}
 		}
-}
+		
+		pub fun borrowViewResolver(id: UInt64): &AnyResource{MetadataViews.Resolver} {
+            let nft = (&self.ownedNFTs[id] as auth &NonFungibleToken.NFT?)!
+            let dimeNFT = nft as! &DimeCollectibleV4.NFT
+            return dimeNFT as &AnyResource{MetadataViews.Resolver}
+        }
+	}
 
 	// Public function that anyone can call to create a new empty collection
-	pub fun createEmptyCollection(): @DimeCollectibleV3.Collection {
+	pub fun createEmptyCollection(): @DimeCollectibleV4.Collection {
 		return <- create Collection()
 	}
 
 	pub resource NFTMinter {
 		// Mint a standard DimeCollectible NFT
-		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, blueprintId: UInt64,
-			numCopies: UInt64, creators: [Address], content: String, hiddenContent: String?,
-			tradeable: Bool, previousHistory: [Transaction]?, royalties: Royalties,
+		pub fun mintNFTs(collection: &{NonFungibleToken.CollectionPublic}, name: String,
+			description: String, blueprintId: UInt64, numCopies: UInt64, creators: [Address],
+			content: String, hiddenContent: String?, tradeable: Bool,
+			previousHistory: [Transaction]?, royalties: MetadataViews.Royalties,
 			initialSale: Transaction?) {
 			let history: [Transaction] = initialSale != nil ? [initialSale!] : []
 			var counter = 1 as UInt64
 			while counter <= numCopies {
-				let tokenId = DimeCollectibleV3.totalSupply + counter
-				collection.deposit(token: <- create DimeCollectibleV3.NFT(
-					id: tokenId, type: NFTType.standard, creators: creators, content: content,
-					hiddenContent: hiddenContent, blueprintId: blueprintId, serialNumber: counter,
-					tradeable: tradeable, history: history, previousHistory: previousHistory, royalties: royalties
+				let tokenId = DimeCollectibleV4.totalSupply + counter
+				collection.deposit(token: <- create DimeCollectibleV4.NFT(
+					id: tokenId, type: NFTType.standard, name: name, description: description,
+					creators: creators, content: content, hiddenContent: hiddenContent,
+					blueprintId: blueprintId, serialNumber: counter, editions: numCopies,
+					tradeable: tradeable, history: history, previousHistory: previousHistory,
+					royalties: royalties
 				))
 
 				emit Minted(id: tokenId)
 				counter = counter + 1
 			}
-			DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + numCopies
+			DimeCollectibleV4.totalSupply = DimeCollectibleV4.totalSupply + numCopies
 		}
 
-		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, blueprintId: UInt64,
-			numCopies: UInt64, creators: [Address], content: String, tradeable: Bool, royalties: Royalties,
-			initialSale: Transaction?): [UInt64] {
+		pub fun mintRoyaltyNFTs(collection: &{NonFungibleToken.CollectionPublic}, name: String,
+			description: String,blueprintId: UInt64, numCopies: UInt64, creators: [Address],
+			content: String, tradeable: Bool, royalties: MetadataViews.Royalties,
+			initialSale: Transaction?):
+			[UInt64] {
 			let history: [Transaction] = initialSale != nil ? [initialSale!] : []
 			var counter = 1 as UInt64
 			let idsUsed: [UInt64] = []
 			while counter <= numCopies {
-				let tokenId = DimeCollectibleV3.totalSupply + counter
-				collection.deposit(token: <- create DimeCollectibleV3.NFT(
-					id: tokenId, type: NFTType.royalty, creators: creators, content: content, hiddenContent: nil,
-					blueprintId: blueprintId, serialNumber: counter, tradeable: tradeable, history: history,
-					previousHistory: nil, royalties: royalties
+				let tokenId = DimeCollectibleV4.totalSupply + counter
+				collection.deposit(token: <- create DimeCollectibleV4.NFT(
+					id: tokenId, type: NFTType.royalty, name: name, description: description,
+					creators: creators, content: content, hiddenContent: nil,
+					blueprintId: blueprintId, serialNumber: counter, editions: numCopies,
+					tradeable: tradeable, history: history, previousHistory: nil,
+					royalties: royalties
 				))
 
 				emit Minted(id: tokenId)
 				idsUsed.append(tokenId)
 				counter = counter + 1
 			}
-			DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + numCopies
+			DimeCollectibleV4.totalSupply = DimeCollectibleV4.totalSupply + numCopies
 			return idsUsed
 		}
 
-		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, blueprintId: UInt64,
-			numCopies: UInt64, creators: [Address], content: String, hiddenContent: String?, tradeable: Bool,
-			previousHistory: [Transaction]?, royalties: Royalties, initialSale: Transaction?) {
+		pub fun mintReleaseNFTs(collection: &{NonFungibleToken.CollectionPublic}, name: String,
+			description: String, blueprintId: UInt64, numCopies: UInt64, creators: [Address],
+			content: String, hiddenContent: String?, tradeable: Bool,
+			previousHistory:[Transaction]?, royalties: MetadataViews.Royalties,
+			initialSale: Transaction?) {
 			let history: [Transaction] = initialSale != nil ? [initialSale!] : []
 			var counter = 1 as UInt64
 			while counter <= numCopies {
-				let tokenId = DimeCollectibleV3.totalSupply + counter
-				collection.deposit(token: <- create DimeCollectibleV3.NFT(
-					id: tokenId, type: NFTType.release, creators: creators, content: content,
-					hiddenContent: hiddenContent, blueprintId: blueprintId, serialNumber: counter,
-					tradeable: tradeable, history: history, previousHistory: previousHistory, royalties: royalties
+				let tokenId = DimeCollectibleV4.totalSupply + counter
+				collection.deposit(token: <- create DimeCollectibleV4.NFT(
+					id: tokenId, type: NFTType.release, name: name, description: description,
+					creators: creators, content: content, hiddenContent: hiddenContent,
+					blueprintId: blueprintId, serialNumber: counter, editions: numCopies,
+					tradeable: tradeable, history: history, previousHistory: previousHistory,
+					royalties: royalties
 				))
 
 				emit Minted(id: tokenId)
 				counter = counter + 1
 			}
-			DimeCollectibleV3.totalSupply = DimeCollectibleV3.totalSupply + numCopies
+			DimeCollectibleV4.totalSupply = DimeCollectibleV4.totalSupply + numCopies
 		}
 	}
 
 	init() {
 		// Set our named paths
-		self.CollectionStoragePath = /storage/DimeCollectionV3
-		self.CollectionPrivatePath = /private/DimeCollectionV3
-		self.CollectionPublicPath = /public/DimeCollectionV3
-		self.MinterStoragePath = /storage/DimeMinterV3
-		self.MinterPublicPath = /public/DimeMinterV3
+		self.CollectionStoragePath = /storage/DimeCollectionV4
+		self.CollectionPrivatePath = /private/DimeCollectionV4
+		self.CollectionPublicPath = /public/DimeCollectionV4
+		self.MinterStoragePath = /storage/DimeMinterV4
+		self.MinterPublicPath = /public/DimeMinterV4
 
 		// Initialize the total supply
 		self.totalSupply = 0

@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: UNLICENSED */
 
-import DimeCollectibleV3 from 0xf5cdaace879e5a79
+import DimeCollectibleV4 from 0xf5cdaace879e5a79
 import FungibleToken from 0xf233dcee88fe0abe
 import FUSD from 0x3c5959b568896393
+import MetadataViews from 0x1d7e57aa55817448
 import NonFungibleToken from 0x1d7e57aa55817448
 
-pub contract DimeRoyalties {
+pub contract DimeRoyaltiesV2 {
     // Events
 	pub event ReleaseCreated(releaseId: UInt64)
     pub event RoyaltyNFTAdded(itemId: UInt64)
@@ -46,7 +47,7 @@ pub contract DimeRoyalties {
         pub let managerFees: UFix64
         pub fun getArtistShares(): SaleShares
         pub fun getManagerShares(): SaleShares
-        pub fun getSecondarySaleRoyalties(): DimeCollectibleV3.Royalties
+        pub fun getSecondarySaleRoyalties(): MetadataViews.Royalties
     }
 
     pub resource Release: ReleasePublic {
@@ -80,8 +81,8 @@ pub contract DimeRoyalties {
         // only the actual owner can change the listing
         pub fun updateOwner(id: UInt64, newOwner: Address) {
             let collection = getAccount(newOwner).getCapability
-                <&DimeCollectibleV3.Collection{DimeCollectibleV3.DimeCollectionPublic}>
-                (DimeCollectibleV3.CollectionPublicPath).borrow()
+                <&DimeCollectibleV4.Collection{DimeCollectibleV4.DimeCollectionPublic}>
+                (DimeCollectibleV4.CollectionPublicPath).borrow()
                 ?? panic("Couldn't borrow a capability to the new owner's collection")
             let nft = collection.borrowCollectible(id: id)
             assert(nft != nil, message: "That user doesn't own that NFT")
@@ -114,14 +115,14 @@ pub contract DimeRoyalties {
 			return self.managerShares
 		}
 
-        pub let secondarySaleRoyalties: DimeCollectibleV3.Royalties
-        pub fun getSecondarySaleRoyalties():  DimeCollectibleV3.Royalties {
+        pub let secondarySaleRoyalties: MetadataViews.Royalties
+        pub fun getSecondarySaleRoyalties():  MetadataViews.Royalties {
             return self.secondarySaleRoyalties
         }
 
         pub init(id: UInt64, royaltiesPerShare: UFix64, numRoyaltyNFTs: UInt64,
             managerFees: UFix64, artistShares: SaleShares, managerShares: SaleShares,
-            secondarySaleRoyalties: DimeCollectibleV3.Royalties) {
+            secondarySaleRoyalties: MetadataViews.Royalties) {
             self.id = id
             self.royaltiesPerShare = royaltiesPerShare
             self.numRoyaltyNFTs = numRoyaltyNFTs
@@ -173,28 +174,28 @@ pub contract DimeRoyalties {
             return &self.releases[id] as &Release?
         }
 
-        pub fun createRelease(collection: &DimeCollectibleV3.Collection{NonFungibleToken.CollectionPublic},
+        pub fun createRelease(collection: &DimeCollectibleV4.Collection{NonFungibleToken.CollectionPublic},
             totalRoyalties: UFix64, numRoyaltyNFTs: UInt64, tradeable: Bool, managerFees: UFix64,
-            artistShares: SaleShares, managerShares: SaleShares, secondarySaleRoyalties: DimeCollectibleV3.Royalties) {
-            let minterAddress: Address = 0xf5cdaace879e5a79
+            artistShares: SaleShares, managerShares: SaleShares, secondarySaleRoyalties: MetadataViews.Royalties) {
+            let minterAddress: Address = 0x056a9cc93a020fad // 0x056a9cc93a020fad for testnet. 0xf5cdaace879e5a79 for mainnet
             let minterRef = getAccount(minterAddress)
-                .getCapability<&DimeCollectibleV3.NFTMinter>(DimeCollectibleV3.MinterPublicPath)
+                .getCapability<&DimeCollectibleV4.NFTMinter>(DimeCollectibleV4.MinterPublicPath)
                 .borrow()!
-            let release <- create Release(id: DimeRoyalties.nextReleaseId, royaltiesPerShare: totalRoyalties / UFix64(numRoyaltyNFTs),
+            let release <- create Release(id: DimeRoyaltiesV2.nextReleaseId, royaltiesPerShare: totalRoyalties / UFix64(numRoyaltyNFTs),
                 numRoyaltyNFTs: numRoyaltyNFTs, managerFees: managerFees, artistShares: artistShares,
                 managerShares: managerShares, secondarySaleRoyalties: secondarySaleRoyalties)
-            let existing <- self.releases[DimeRoyalties.nextReleaseId] <- release
+            let existing <- self.releases[DimeRoyaltiesV2.nextReleaseId] <- release
             // This should always be null, but we need to handle this explicitly
             destroy existing
 
-            emit ReleaseCreated(releaseId: DimeRoyalties.nextReleaseId)
-            DimeRoyalties.nextReleaseId = DimeRoyalties.nextReleaseId + (1 as UInt64)
+            emit ReleaseCreated(releaseId: DimeRoyaltiesV2.nextReleaseId)
+            DimeRoyaltiesV2.nextReleaseId = DimeRoyaltiesV2.nextReleaseId + (1 as UInt64)
         }
 
         // A release can only be deleted if the creator still owns all the associated royalty
         // and release NFTs. In this case, we delete all of them and then destroy the Release.
         pub fun deleteRelease(releaseId: UInt64,
-            collection: Capability<&DimeCollectibleV3.Collection>) {
+            collection: Capability<&DimeCollectibleV4.Collection>) {
             let release <- self.releases.remove(key:releaseId)!
             let collectionRef = collection.borrow() ?? panic("Couldn't borrow provided collection")
             let collectionIds = collectionRef.getIDs()
@@ -217,9 +218,9 @@ pub contract DimeRoyalties {
     }
 
 	init () {
-		self.ReleasesStoragePath = /storage/DimeReleases
-		self.ReleasesPrivatePath = /private/DimeReleases
-		self.ReleasesPublicPath = /public/DimeReleases
+		self.ReleasesStoragePath = /storage/DimeReleasesV2
+		self.ReleasesPrivatePath = /private/DimeReleasesV2
+		self.ReleasesPublicPath = /public/DimeReleasesV2
 
         self.nextReleaseId = 0
 	}

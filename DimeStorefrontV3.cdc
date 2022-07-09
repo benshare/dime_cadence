@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: UNLICENSED */
 
-import DimeCollectibleV3 from 0xf5cdaace879e5a79
-import DimeRoyalties from 0xb1f55a636af51134
+import DimeCollectibleV4 from 0xf5cdaace879e5a79
+import DimeRoyaltiesV2 from 0xb1f55a636af51134
 import FungibleToken from 0xf233dcee88fe0abe
 import FUSD from 0x3c5959b568896393
+import MetadataViews from 0x1d7e57aa55817448
 import NonFungibleToken from 0x1d7e57aa55817448
 
-pub contract DimeStorefrontV3 {
+pub contract DimeStorefrontV4 {
 
 	// SaleOffer events
 	// A sale offer has been created.
@@ -21,44 +22,22 @@ pub contract DimeStorefrontV3 {
 	pub let StorefrontPrivatePath: PrivatePath
 	pub let StorefrontPublicPath: PublicPath
 
-	// This struct represents the recipients of the earnings from a sale.
-	// Earnings--the price paid for an item, minus Dime's fee and any creator
-	// royalties--are distributed among the recipients' vaults according to
-	// their allotments
-	pub struct SaleShares {
-		access(self) let allotments: {Address: UFix64}
-
-		init(allotments: {Address: UFix64}) {
-			var total = 0.0
-			for allotment in allotments.values {
-				assert(allotment > 0.0, message: "Each recipient must receive an allotment > 0")
-				total = total + allotment
-			}
-			assert(total == 1.0, message: "Total sale shares must equal exactly 1")
-			self.allotments = allotments
-		}
-
-		pub fun getShares(): {Address: UFix64} {
-			return self.allotments
-		}
-	}
-
 	// An interface providing a read-only view of a SaleOffer
 	pub resource interface SaleOfferPublic {
 		pub let itemId: UInt64
 
 		pub let isInitialSale: Bool
 		pub var price: UFix64
-		pub fun getSaleShares(): SaleShares
+		pub fun getSaleShares(): MetadataViews.Royalties
 	}
 
-	// A DimeCollectibleV3 NFT being offered to sale for a set fee
+	// A DimeCollectibleV4 NFT being offered to sale for a set fee
 	pub resource SaleOffer: SaleOfferPublic {
 		// Whether the sale has completed with someone purchasing the item.
 		pub var saleCompleted: Bool
 
 		// The collection containing the NFT.
-		access(self) let sellerItemProvider: Capability<&DimeCollectibleV3.Collection{NonFungibleToken.Provider}>
+		access(self) let sellerItemProvider: Capability<&DimeCollectibleV4.Collection{NonFungibleToken.Provider}>
 
 		// The NFT for sale.
 		pub let itemId: UInt64
@@ -68,17 +47,17 @@ pub contract DimeStorefrontV3 {
 
 		// Set by the seller, can be modified
 		pub var price: UFix64
-		access(self) var saleShares: SaleShares
-		pub fun getSaleShares(): SaleShares {
+		access(self) var saleShares: MetadataViews.Royalties
+		pub fun getSaleShares(): MetadataViews.Royalties {
 			return self.saleShares
 		}
 
 		// Take the information required to create a sale offer. Other than the NFT and
 		// a provider for it, all that is needed is the sales info, since everything
 		// else is derived from the NFT itself
-		init(nft: &DimeCollectibleV3.NFT,
-			sellerItemProvider: Capability<&DimeCollectibleV3.Collection{NonFungibleToken.Provider}>,
-			price: UFix64, saleShares: SaleShares) {
+		init(nft: &DimeCollectibleV4.NFT,
+			sellerItemProvider: Capability<&DimeCollectibleV4.Collection{NonFungibleToken.Provider}>,
+			price: UFix64, saleShares: MetadataViews.Royalties) {
 			self.saleCompleted = false
 			self.sellerItemProvider = sellerItemProvider
 
@@ -94,7 +73,7 @@ pub contract DimeStorefrontV3 {
 			self.price = newPrice
 		}
 
-		pub fun setSaleShares(newShares: SaleShares) {
+		pub fun setSaleShares(newShares: MetadataViews.Royalties) {
 			self.saleShares = newShares
 		}
 	}
@@ -111,14 +90,14 @@ pub contract DimeStorefrontV3 {
 	// and changing the price and shares of existing offers
 	pub resource interface StorefrontManager {
 		pub fun createSaleOffers(
-			itemProvider: Capability<&DimeCollectibleV3.Collection{DimeCollectibleV3.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			itemProvider: Capability<&DimeCollectibleV4.Collection{DimeCollectibleV4.DimeCollectionPublic, NonFungibleToken.Provider}>,
 			items: [UInt64],
 			price: UFix64,
-			saleShares: SaleShares
+			saleShares: MetadataViews.Royalties
 		)
 		pub fun removeSaleOffers(itemIds: [UInt64], beingPurchased: Bool)
 		pub fun setPrices(itemIds: [UInt64], newPrice: UFix64)
-		pub fun setSaleShares(itemIds: [UInt64], newShares: SaleShares)
+		pub fun setSaleShares(itemIds: [UInt64], newShares: MetadataViews.Royalties)
 	}
 
 	// The resource representing a user's storefront of SaleOffers, implementing
@@ -142,10 +121,10 @@ pub contract DimeStorefrontV3 {
 		}
 
 		pub fun createSaleOffers(
-			itemProvider: Capability<&DimeCollectibleV3.Collection{DimeCollectibleV3.DimeCollectionPublic, NonFungibleToken.Provider}>,
+			itemProvider: Capability<&DimeCollectibleV4.Collection{DimeCollectibleV4.DimeCollectionPublic, NonFungibleToken.Provider}>,
 			items: [UInt64],
 			price: UFix64,
-			saleShares: SaleShares
+			saleShares: MetadataViews.Royalties
 		) {
 			assert(itemProvider.borrow() != nil, message: "Couldn't get a capability to the seller's collection")
 
@@ -202,7 +181,7 @@ pub contract DimeStorefrontV3 {
 			}
 		}
 
-		pub fun setSaleShares(itemIds: [UInt64], newShares: SaleShares) {
+		pub fun setSaleShares(itemIds: [UInt64], newShares: MetadataViews.Royalties) {
 			for itemId in itemIds {
 				assert(self.saleOffers[itemId] != nil,
 					message: "Tried to change sale shares of an item that's not on sale")
@@ -228,8 +207,8 @@ pub contract DimeStorefrontV3 {
 	}
 
 	init () {
-		self.StorefrontStoragePath = /storage/DimeStorefrontV3
-		self.StorefrontPrivatePath = /private/DimeStorefrontV3
-		self.StorefrontPublicPath = /public/DimeStorefrontV3
+		self.StorefrontStoragePath = /storage/DimeStorefrontV4
+		self.StorefrontPrivatePath = /private/DimeStorefrontV4
+		self.StorefrontPublicPath = /public/DimeStorefrontV4
 	}
 }
